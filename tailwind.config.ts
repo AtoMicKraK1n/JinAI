@@ -18,6 +18,11 @@ export default {
       },
     },
     extend: {
+      fontFamily: {
+        montserrat: ["Montserrat", "sans-serif"],
+        rajdhani: ["Rajdhani", "sans-serif"],
+        orbitron: ["Orbitron", "monospace"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -28,7 +33,7 @@ export default {
         jingold: {
           DEFAULT: "#D4AF37",
           light: "#F4D03F",
-          dark: "#B4943F"
+          dark: "#B4943F",
         },
         primary: {
           DEFAULT: "hsl(var(--primary))",
@@ -60,7 +65,7 @@ export default {
         },
       },
       keyframes: {
-        "float": {
+        float: {
           "0%, 100%": { transform: "translateY(0)" },
           "50%": { transform: "translateY(-20px)" },
         },
@@ -77,10 +82,6 @@ export default {
         float: "float 6s ease-in-out infinite",
         "pulse-gold": "pulse-gold 2s ease-in-out infinite",
         "slide-up": "slide-up 0.5s ease-out",
-      },
-      fontFamily: {
-        montserrat: ["Montserrat", "sans-serif"],
-        rajdhani: ["Rajdhani", "sans-serif"],
       },
     },
   },

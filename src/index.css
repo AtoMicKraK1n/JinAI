@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -34,12 +34,58 @@
     @apply border-border;
   }
   body {
-    @apply bg-jinblack text-foreground font-montserrat;
+    @apply bg-jinblack text-foreground font-montserrat overflow-x-hidden;
   }
 }
 
+/* Neo-Skeuomorphic & Glassmorphic Styles */
 .glass-card {
   @apply bg-black bg-opacity-30 backdrop-blur-md border border-jingold/20 rounded-xl;
+}
+
+.neo-card {
+  background: linear-gradient(
+    145deg,
+    rgba(20, 20, 20, 0.9),
+    rgba(5, 5, 5, 0.9)
+  );
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 20px rgba(212, 175, 55, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.neo-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 0 30px rgba(212, 175, 55, 0.2);
+}
+
+.neo-button {
+  background: linear-gradient(145deg, #d4af37, #b4943f);
+  border: none;
+  border-radius: 12px;
+  color: #0a0a0a;
+  font-weight: 600;
+  padding: 12px 24px;
+  position: relative;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.neo-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(212, 175, 55, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+}
+
+.neo-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(212, 175, 55, 0.3),
+    inset 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
 .game-card {
@@ -47,7 +93,7 @@
 }
 
 .game-card::before {
-  content: '';
+  content: "";
   @apply absolute inset-0 bg-gradient-to-t from-jinblack via-transparent to-transparent opacity-0 transition-opacity duration-300;
 }
 
@@ -68,6 +114,82 @@
   @apply bg-gradient-to-r from-jingold-light via-jingold to-jingold-dark bg-clip-text text-transparent font-rajdhani text-4xl font-bold;
 }
 
+.futuristic-text {
+  font-family: "Orbitron", monospace;
+  text-shadow: 0 0 10px rgba(212, 175, 55, 0.5);
+  letter-spacing: 2px;
+}
+
+.particle-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.glow-effect {
+  filter: drop-shadow(0 0 10px rgba(212, 175, 55, 0.6));
+}
+
+.soft-shadow {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.inner-glow {
+  box-shadow: inset 0 0 20px rgba(212, 175, 55, 0.1);
+}
+
+/* Progress Bar Styling */
+.progress-bar {
+  background: linear-gradient(90deg, #d4af37, #f4d03f);
+  border-radius: 50px;
+  box-shadow: 0 0 20px rgba(212, 175, 55, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-bar::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+/* Particle System */
+.particle {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #d4af37;
+  border-radius: 50%;
+  opacity: 0.7;
+  animation: float-particle 8s infinite linear;
+}
+
+.particle:nth-child(odd) {
+  animation-delay: -2s;
+  background: #f4d03f;
+}
+
+.particle:nth-child(even) {
+  animation-delay: -4s;
+  background: #b4943f;
+}
+
+/* Animations */
 @keyframes shrink {
   from {
     width: 100%;
@@ -78,7 +200,8 @@
 }
 
 @keyframes float {
-  0%, 100% {
+  0%,
+  100% {
     transform: translateY(0);
   }
   50% {
@@ -86,6 +209,46 @@
   }
 }
 
+@keyframes float-particle {
+  0% {
+    transform: translateY(100vh) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  90% {
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(-100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(212, 175, 55, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
+  }
+}
+
 .animate-float {
   animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
 }
