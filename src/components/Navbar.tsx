@@ -1,6 +1,6 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useRouter, usePathname } from "next/navigation";
 import {
   IconBolt,
   IconTrophy,
@@ -10,10 +10,10 @@ import {
 import { ConnectWallet } from "./ConnectWallet";
 
 const Navbar: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => pathname === path;
 
   return (
     <motion.nav
@@ -30,7 +30,7 @@ const Navbar: React.FC = () => {
               className="flex items-center gap-3 cursor-pointer"
               whileHover={{ scale: 1.05 }}
               transition={{ duration: 0.2 }}
-              onClick={() => navigate("/")}
+              onClick={() => router.push("/")}
             >
               <div className="p-2 bg-gradient-to-br from-jingold to-jingold-dark rounded-lg glow-effect">
                 <IconBolt size={24} className="text-jinblack" />
@@ -50,7 +50,7 @@ const Navbar: React.FC = () => {
                 }`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate("/leaderboard")}
+                onClick={() => router.push("/leaderboard")}
               >
                 <IconTrophy size={18} />
                 <span className="text-sm font-semibold">Leaderboard</span>
@@ -64,7 +64,7 @@ const Navbar: React.FC = () => {
                 }`}
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate("/community")}
+                onClick={() => router.push("/community")}
               >
                 <IconUsers size={18} />
                 <span className="text-sm font-semibold">Community</span>
@@ -78,7 +78,7 @@ const Navbar: React.FC = () => {
                 }`}
                 whileHover={{ scale: 1.05, rotate: 90 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => navigate("/settings")}
+                onClick={() => router.push("/settings")}
               >
                 <IconSettings size={18} />
               </motion.button>

@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   IconSparkles,
   IconBrain,
@@ -10,7 +11,7 @@ import {
 } from "@tabler/icons-react";
 
 const HeroSection: React.FC = () => {
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const features = [
     {
@@ -90,7 +91,7 @@ const HeroSection: React.FC = () => {
             transition={{ duration: 0.8, delay: 0.6 }}
           >
             <motion.button
-              onClick={() => navigate("/quiz")}
+              onClick={() => router.push("/quiz")}
               className="neo-button bg-gradient-to-r from-jingold to-jingold-dark text-jinblack text-lg px-8 py-4 font-bold flex items-center gap-2"
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
