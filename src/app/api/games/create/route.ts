@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { Connection, PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import bs58 from "bs58";
-import idl from "@/app/lib/IDL.json";
-import { JinaiHere } from "@/app/lib/program";
-import prisma from "@/app/lib/prisma";
+import idl from "@/lib/IDL.json";
+import { JinaiHere } from "@/lib/program";
+import prisma from "@/lib/prisma";
 
 const PROGRAM_ID = new PublicKey(idl.address);
 const TREASURY_PUBKEY = new PublicKey(
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const program = new anchor.Program(
       idl as anchor.Idl,
       provider
-    ) as anchor.Program<JinaiHere>;
+    ) as unknown as anchor.Program<JinaiHere>;
 
     const [globalStatePda] = PublicKey.findProgramAddressSync(
       [Buffer.from("global-state")],
@@ -91,29 +91,6 @@ export async function POST(req: NextRequest) {
       ],
       program.programId
     );
-
-    try {
-      await program.methods
-        .appointPool(entryFeeBps)
-        .accountsPartial({
-          globalState: globalStatePda,
-          authority: inGameKeypair.publicKey,
-          treasury: TREASURY_PUBKEY,
-          systemProgram: SystemProgram.programId,
-        })
-        .rpc({ commitment: "confirmed" });
-    } catch (err: any) {
-      if (
-        err.message.includes("already in use") ||
-        err.message.includes("custom program error")
-      ) {
-        console.log(
-          "✅ Global state already initialized, skipping appointPool"
-        );
-      } else {
-        throw err;
-      }
-    }
 
     const endTimestamp = Math.floor(new Date(endTime).getTime() / 1000);
 

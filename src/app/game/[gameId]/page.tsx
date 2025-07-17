@@ -1,49 +1,182 @@
 "use client";
 
-import { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
+import { io, Socket } from "socket.io-client";
+import GameScreen from "@/components/GameScreen";
+import ParticleBackground from "@/components/ParticleBackground";
+import { useTimer } from "@/hooks/useTimer";
+import { getDifficultyColor } from "@/lib/utils";
 
-const GameRoom = () => {
-  const [isLoading, setIsLoading] = useState(false);
+const socket: Socket = io("http://localhost:4000");
 
-  const handleStartGame = () => {
-    setIsLoading(true);
-    // Simulate loading for 2 seconds
-    setTimeout(() => {
-      setIsLoading(false);
-      // Redirect to the specified URL
-      window.location.href =
-        "https://cdn.botpress.cloud/webchat/v2.3/shareable.html?configUrl=https://files.bpcontent.cloud/2024/12/23/17/20241223175850-3HWXR2SW.json";
-    }, 2000);
+export default function QuizGamePage() {
+  const { gameId } = useParams();
+  const router = useRouter();
+
+  const [players, setPlayers] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [gameState, setGameState] = useState({
+    currentQuestion: 0,
+    totalQuestions: 0,
+    answered: false,
+    isCorrect: false,
+    selectedAnswer: null,
+    score: 0,
+    streak: 0,
+    timeLeft: 30,
+    multiplier: 1,
+    perfectAnswers: 0,
+  });
+
+  const userId = useMemo(() => {
+    try {
+      const token = localStorage.getItem("jwt");
+      if (!token) return null;
+
+      const payloadBase64 = token.split(".")[1];
+      if (!payloadBase64) return null;
+
+      const payload = JSON.parse(atob(payloadBase64));
+      return payload.userId;
+    } catch (err) {
+      console.error("Failed to parse JWT", err);
+      return null;
+    }
+  }, []);
+
+  const isHost = useMemo(() => {
+    return players[0]?.userId === userId;
+  }, [players, userId]);
+
+  const { timeLeft } = useTimer({
+    duration: 30,
+    isRunning: !gameState.answered,
+    isHost,
+    roomId: gameId as string,
+    socket,
+    onExpire: () => {
+      setGameState((prev) => ({
+        ...prev,
+        answered: true,
+        selectedAnswer: null,
+        isCorrect: false,
+      }));
+    },
+    dependencies: [gameState.currentQuestion],
+  });
+
+  useEffect(() => {
+    const token = localStorage.getItem("jwt");
+    if (!token || !gameId) return;
+
+    socket.emit("join-game", { gameId, token });
+
+    socket.on("player-joined", (data) => {
+      setPlayers((prev) => {
+        const exists = prev.some((p) => p.userId === data.userId);
+        return exists ? prev : [...prev, data];
+      });
+    });
+
+    socket.on("score-update", (data) => {
+      setPlayers((prev) =>
+        prev.map((p) =>
+          p.userId === data.userId ? { ...p, score: data.score } : p
+        )
+      );
+    });
+
+    fetch(`/api/quiz/questions?gameId=${gameId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setQuestions(data.questions);
+          setGameState((prev) => ({
+            ...prev,
+            totalQuestions: data.questions.length,
+          }));
+        }
+      });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [gameId]);
+
+  useEffect(() => {
+    setGameState((prev) => ({ ...prev, timeLeft }));
+  }, [timeLeft]);
+
+  const selectAnswer = (index: number) => {
+    const currentQ = questions[gameState.currentQuestion];
+    const correct = currentQ.correctAnswer ?? null; // optional, use if included
+    const isCorrect = index === correct;
+
+    setGameState((prev) => {
+      const nextScore = prev.score + (isCorrect ? 100 : 0);
+      return {
+        ...prev,
+        answered: true,
+        selectedAnswer: index,
+        isCorrect,
+        score: nextScore,
+        streak: isCorrect ? prev.streak + 1 : 0,
+        multiplier: isCorrect ? prev.multiplier + 1 : 1,
+        perfectAnswers: isCorrect
+          ? prev.perfectAnswers + 1
+          : prev.perfectAnswers,
+      };
+    });
+
+    socket.emit("score-update", {
+      gameId,
+      userId,
+      score: gameState.score + (isCorrect ? 100 : 0),
+    });
   };
 
-  return (
-    <div className="min-h-screen bg-[url('/gtavbg.jpg')] bg-cover bg-center flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-black/70 p-8 rounded-lg max-w-md w-full text-white"
-      >
-        <h1 className="text-4xl font-bold mb-6 text-center text-yellow-400">
-          GTA V AI Adventure
-        </h1>
-        <p className="text-lg mb-8 text-center">
-          Ready to explore Los Santos with our cutting-edge AI? Your digital
-          journey awaits!
-        </p>
-        <div className="flex justify-center">
-          <Button
-            onClick={handleStartGame}
-            disabled={isLoading}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-6 rounded-full text-lg transition-all duration-300 transform hover:scale-105"
-          >
-            {isLoading ? "Loading..." : "Let's Go!"}
-          </Button>
-        </div>
-      </motion.div>
-    </div>
-  );
-};
+  const nextQuestion = () => {
+    const next = gameState.currentQuestion + 1;
+    if (next >= questions.length) {
+      router.push(`/quiz/${gameId}/results`);
+    } else {
+      setGameState((prev) => ({
+        ...prev,
+        currentQuestion: next,
+        answered: false,
+        isCorrect: false,
+        selectedAnswer: null,
+        timeLeft: 30,
+      }));
+    }
+  };
 
-export default GameRoom;
+  const getAnswerButtonStyle = () => "neo-button";
+
+  return (
+    <>
+      <ParticleBackground />
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="relative z-10 min-h-screen"
+      >
+        {questions.length > 0 && (
+          <GameScreen
+            players={players}
+            gameState={gameState}
+            question={questions[gameState.currentQuestion]}
+            selectAnswer={selectAnswer}
+            getAnswerButtonStyle={getAnswerButtonStyle}
+            nextQuestion={nextQuestion}
+            getDifficultyColor={getDifficultyColor}
+          />
+        )}
+      </motion.div>
+    </>
+  );
+}

@@ -4,8 +4,8 @@ import jwt from "jsonwebtoken";
 import { Connection, PublicKey, SystemProgram, Keypair } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import bs58 from "bs58";
-import idl from "@/app/lib/IDL.json";
-import { JinaiHere } from "@/app/lib/program";
+import idl from "@/lib/IDL.json";
+import { JinaiHere } from "@/lib/program";
 
 const prisma = new PrismaClient();
 const PROGRAM_ID = new PublicKey(idl.address);
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     const program = new anchor.Program(
       idl as anchor.Idl,
       provider
-    ) as anchor.Program<JinaiHere>;
+    ) as unknown as anchor.Program<JinaiHere>;
 
     const poolIndex = game.poolIndex; // stored from previous createPool
     const LAMPORTS_PER_SOL = 1_000_000_000;

@@ -13,6 +13,12 @@ const io = new Server(httpServer, {
   },
 });
 
+setupSocketServer(io);
+
+httpServer.listen(4000, () => {
+  console.log("✅ WebSocket server running on port 4000");
+});
+
 // Setup Socket.IO event handlers
 function setupSocketServer(io) {
   io.on("connection", (socket) => {
@@ -47,6 +53,11 @@ function setupSocketServer(io) {
         console.error("❌ Token verification failed:", err);
         socket.emit("error", { message: "Invalid token" });
       }
+      console.log("✅ join-game triggered with:", gameId, userId);
+      console.log("📤 Emitting player-joined:", {
+        userId,
+        username: participant.user.username,
+      });
     });
 
     socket.on("score-update", (data) => {
@@ -91,9 +102,18 @@ function setupSocketServer(io) {
 
     socket.on("player-joined", ({ gameId, playerId }) => {
       io.to(gameId).emit("player-joined", {
-        playerId,
-        message: `👤 Player ${playerId} joined`,
+        userId,
+        username: participant.user.username,
       });
+    });
+
+    // ✅ New: Real-time timer sync
+    socket.on("timer-update", ({ roomId, timeLeft }) => {
+      io.to(roomId).emit("timer-update", { roomId, timeLeft });
+    });
+
+    socket.on("timer-expired", ({ roomId }) => {
+      io.to(roomId).emit("timer-expired", { roomId });
     });
 
     socket.on("disconnect", () => {
@@ -106,24 +126,3 @@ function setupSocketServer(io) {
     });
   });
 }
-
-// Initialize the socket server
-setupSocketServer(io);
-
-// Start the server
-httpServer.listen(4000, () => {
-  console.log("✅ WebSocket server running on port 4000");
-});
-
-// Graceful shutdown
-process.on("SIGINT", async () => {
-  console.log("🛑 Shutting down server...");
-  await prisma.$disconnect();
-  process.exit(0);
-});
-
-process.on("SIGTERM", async () => {
-  console.log("🛑 Shutting down server...");
-  await prisma.$disconnect();
-  process.exit(0);
-});
