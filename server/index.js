@@ -44,6 +44,11 @@ function setupSocketServer(io) {
         socket.data.gameId = gameId;
 
         console.log(`🎮 ${participant.user.username} joined game ${gameId}`);
+        console.log("✅ join-game triggered with:", gameId, userId);
+        console.log("📤 Emitting player-joined:", {
+          userId,
+          username: participant.user.username,
+        });
 
         io.to(gameId).emit("player-joined", {
           userId,
@@ -53,11 +58,6 @@ function setupSocketServer(io) {
         console.error("❌ Token verification failed:", err);
         socket.emit("error", { message: "Invalid token" });
       }
-      console.log("✅ join-game triggered with:", gameId, userId);
-      console.log("📤 Emitting player-joined:", {
-        userId,
-        username: participant.user.username,
-      });
     });
 
     socket.on("score-update", (data) => {

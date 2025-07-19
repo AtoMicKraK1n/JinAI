@@ -15,7 +15,7 @@ import {
 
 interface Player {
   userId: string;
-  wallet: string;
+  username: string;
 }
 
 interface StartLobbyProps {
@@ -102,7 +102,7 @@ const StartLobby: React.FC<StartLobbyProps> = ({ players }) => {
           <div className="space-y-3">
             {players.slice(0, 4).map((player, index) => (
               <motion.div
-                key={player.wallet}
+                key={player.username}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.9 + index * 0.1 }}
@@ -110,7 +110,7 @@ const StartLobby: React.FC<StartLobbyProps> = ({ players }) => {
               >
                 <div className="flex-1">
                   <span className="text-white font-semibold">
-                    {`Player_${player.wallet.slice(0, 6)}`}
+                    {player.username}
                   </span>
                 </div>
                 <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />

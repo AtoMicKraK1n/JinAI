@@ -1,40 +1,71 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import ParticleBackground from "@/components/ParticleBackground";
 import { motion } from "framer-motion";
+import Navbar from "@/components/Navbar";
 
 export default function HostStartPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(true);
 
-  const handleCreateGame = async () => {
-    const token = localStorage.getItem("jwt");
-    const res = await fetch("/api/games/create", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        entryFeeBps: 500,
-        minDeposit: 1 * 1e9, // 1 SOL
-        endTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 mins from now
-        prizeDistribution: [40, 30, 10, 10],
-      }),
-    });
+  useEffect(() => {
+    const checkOrCreateGame = async () => {
+      const token = localStorage.getItem("jwt");
+      if (!token) {
+        alert("Please log in first.");
+        router.push("/auth");
+        return;
+      }
 
-    const data = await res.json();
-    if (data.success) {
-      router.push(`/lobby/${data.gameId}`);
-    } else {
-      alert("❌ Failed to create game");
-      console.error(data);
-    }
-  };
+      try {
+        // ✅ Try to fetch latest WAITING game
+        const res = await fetch("/api/games/latest", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+
+        if (res.ok && data?.gameId) {
+          //Join existing WAITING game
+          router.push(`/lobby/${data.gameId}`);
+        } else {
+          //Create new game if no joinable one
+          const createRes = await fetch("/api/games/create", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              entryFeeBps: 500,
+              minDeposit: 1 * 1e9, // 1 SOL
+              endTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+              prizeDistribution: [40, 30, 10, 10],
+            }),
+          });
+
+          const createData = await createRes.json();
+          if (createData.success) {
+            router.push(`/lobby/${createData.gameId}`);
+          } else {
+            console.error(createData);
+            alert("❌ Failed to create game");
+          }
+        }
+      } catch (err) {
+        console.error("Game setup failed:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkOrCreateGame();
+  }, [router]);
 
   return (
     <>
+      <Navbar />
       <ParticleBackground />
       <motion.div
         initial={{ opacity: 0 }}
@@ -43,17 +74,8 @@ export default function HostStartPage() {
       >
         <div className="bg-black/60 p-10 rounded-lg border border-gray-700 shadow-lg text-center">
           <h1 className="text-4xl font-bold text-golden-400 mb-6">
-            Host a New Quiz Game
+            {loading ? "Checking for existing game..." : "Redirecting..."}
           </h1>
-          <p className="text-gray-400 mb-8">
-            Click below to deploy a pool on-chain and start the lobby.
-          </p>
-          <button
-            onClick={handleCreateGame}
-            className="neo-button px-6 py-3 bg-golden-400 text-black font-semibold rounded hover:bg-golden-500 transition"
-          >
-            🚀 Create Game
-          </button>
         </div>
       </motion.div>
     </>

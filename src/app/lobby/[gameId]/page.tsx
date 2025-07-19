@@ -3,46 +3,45 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import StartLobby from "@/components/StartLobby";
 import ParticleBackground from "@/components/ParticleBackground";
-import socket from "@/lib/socket"; // ✅ use shared socket
+import StartLobby from "@/components/StartLobby";
+import socket from "@/lib/socket";
+import Navbar from "@/components/Navbar";
+
+import {
+  Connection,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+} from "@solana/web3.js";
+import { useWallet, useConnection } from "@solana/wallet-adapter-react";
+import { useToast } from "@/components/ui/use-toast";
+
+import idl from "@/lib/IDL.json";
+import { JinaiHere } from "@/lib/program";
+import * as anchor from "@coral-xyz/anchor";
 
 export default function LobbyPage() {
   const { gameId } = useParams();
   const router = useRouter();
   const [players, setPlayers] = useState<any[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
+  const { publicKey, signTransaction } = useWallet();
+  const { connection } = useConnection();
+  const { toast } = useToast();
 
   useEffect(() => {
-    try {
-      const token = localStorage.getItem("jwt");
-      if (!token) throw new Error("No token");
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      setUserId(payload.userId);
-    } catch (err) {
-      console.error("❌ Failed to extract userId from JWT:", err);
-      setUserId(null);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!gameId || !userId) return;
+    if (!gameId || !publicKey || !signTransaction) return;
 
     const token = localStorage.getItem("jwt");
     if (!token) return;
 
-    // ✅ Connect socket once
-    if (!socket.connected) {
-      socket.connect();
-    }
+    if (!socket.connected) socket.connect();
 
-    // 🛠️ DEBUG: Connection
     socket.on("connect", () => {
-      console.log("✅ Connected to socket:", socket.id);
+      console.log("✅ Socket connected:", socket.id);
     });
-
     socket.on("disconnect", () => {
-      console.log("❌ Disconnected from socket:", socket.id);
+      console.log("❌ Socket disconnected");
     });
 
     const joinGame = async () => {
@@ -57,30 +56,110 @@ export default function LobbyPage() {
         });
 
         const data = await res.json();
-        if (!data.success) {
-          console.error("❌ Failed to join pool:", data.message);
+        if (!res.ok || !data.success) {
+          toast({
+            variant: "destructive",
+            title: "Join failed",
+            description: data.error,
+          });
           return;
         }
 
-        console.log("📡 Emitting join-game");
+        const provider = new anchor.AnchorProvider(
+          connection,
+          {
+            publicKey,
+            signTransaction,
+            signAllTransactions: async (txs) =>
+              Promise.all(txs.map(signTransaction)),
+          },
+          { preflightCommitment: "confirmed" }
+        );
+        const program = new anchor.Program(
+          idl as anchor.Idl,
+          provider
+        ) as unknown as anchor.Program<JinaiHere>;
+
+        const poolIndex = new anchor.BN(data.game.poolIndex);
+        const LAMPORTS_PER_SOL = 1_000_000_000;
+        const depositAmount = new anchor.BN(
+          data.game.entryFee * LAMPORTS_PER_SOL
+        );
+
+        const [poolPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool"), poolIndex.toArrayLike(Buffer, "le", 8)],
+          program.programId
+        );
+        const [vaultPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from("pool-vault"), poolIndex.toArrayLike(Buffer, "le", 8)],
+          program.programId
+        );
+        const [playerPda] = PublicKey.findProgramAddressSync(
+          [
+            Buffer.from("player"),
+            poolIndex.toArrayLike(Buffer, "le", 8),
+            publicKey.toBuffer(),
+          ],
+          program.programId
+        );
+
+        const tx = await program.methods
+          .joinPool(depositAmount)
+          .accountsPartial({
+            pool: poolPda,
+            player: playerPda,
+            playerAuthority: publicKey,
+            poolVault: vaultPda,
+            systemProgram: SystemProgram.programId,
+          })
+          .transaction();
+
+        const { blockhash } = await connection.getLatestBlockhash("finalized");
+        tx.recentBlockhash = blockhash;
+        tx.feePayer = publicKey;
+
+        const signedTx = await signTransaction(tx);
+        const txid = await connection.sendRawTransaction(signedTx.serialize());
+        await connection.confirmTransaction(txid, "confirmed");
+
+        console.log("✅ joinPool success:", txid);
+
+        // 🔊 Notify backend WebSocket
         socket.emit("join-game", { gameId, token });
-      } catch (err) {
-        console.error("Join game error:", err);
+      } catch (err: any) {
+        console.error("Join error:", err);
+        toast({
+          variant: "destructive",
+          title: "Error joining game",
+          description:
+            err.message || "Something went wrong while joining the game.",
+        });
       }
     };
 
     joinGame();
 
+    // 🎧 Listen for full lobby on initial join
+    socket.on("existing-players", (playersList) => {
+      console.log("📋 Existing players received:", playersList);
+      setPlayers(
+        playersList.map((p) => ({
+          userId: p.userId,
+          username: p.username || `anon_${p.userId.slice(0, 4)}`,
+        }))
+      );
+    });
+
+    // 🎧 Update for new joiners
     socket.on("player-joined", (data) => {
-      console.log("📥 player-joined event received:", data);
+      console.log("📥 player-joined:", data);
       setPlayers((prev) => {
-        const exists = prev.some((p) => p.userId === data.userId);
-        if (exists) return prev;
+        if (prev.some((p) => p.userId === data.userId)) return prev;
         return [
           ...prev,
           {
             userId: data.userId,
-            wallet: data.username || `anon_${data.userId.slice(0, 4)}`,
+            username: data.username || `anon_${data.userId.slice(0, 4)}`,
           },
         ];
       });
@@ -92,14 +171,16 @@ export default function LobbyPage() {
 
     return () => {
       socket.off("player-joined");
+      socket.off("existing-players");
       socket.off("start-game");
       socket.off("connect");
       socket.off("disconnect");
     };
-  }, [gameId, userId]);
+  }, [gameId, publicKey, signTransaction]);
 
   return (
     <>
+      <Navbar />
       <ParticleBackground />
       <motion.div
         initial={{ opacity: 0 }}

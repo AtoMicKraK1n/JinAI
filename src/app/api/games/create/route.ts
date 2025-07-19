@@ -12,7 +12,7 @@ const TREASURY_PUBKEY = new PublicKey(
 );
 
 const RPC_URL = process.env.HELIUS_RPC_KEY
-  ? `https://devnet.helius-rpc.com/?api-key=c434b5e0-f58e-4d87-84c1-b7bba03c939f`
+  ? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_RPC_KEY}`
   : "https://api.devnet.solana.com";
 
 export async function POST(req: NextRequest) {
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
             systemProgram: SystemProgram.programId,
           })
           .rpc();
-        poolCount = 0; // Appointing pool always starts at 0
+        poolCount = 0;
       } catch (appointErr) {
         console.error("❌ appointPool failed:", appointErr);
         return NextResponse.json(
@@ -85,20 +85,35 @@ export async function POST(req: NextRequest) {
     const [poolPda] = PublicKey.findProgramAddressSync(
       [
         Buffer.from("pool"),
-        Buffer.from(
-          Uint8Array.of(...new anchor.BN(poolCount).toArray("le", 8))
-        ),
+        new anchor.BN(poolCount).toArrayLike(Buffer, "le", 8),
       ],
       program.programId
     );
 
     const endTimestamp = Math.floor(new Date(endTime).getTime() / 1000);
 
+    // 🛡️ Check if game with this poolId already exists
+    const existing = await prisma.gameSession.findUnique({
+      where: { poolId: poolPda.toBase58() },
+    });
+
+    if (existing) {
+      return NextResponse.json({
+        success: true,
+        message: "Game already exists for this pool",
+        poolAddress: poolPda.toBase58(),
+        poolCount,
+        gameId: existing.id,
+      });
+    }
+
+    // Call createPool on-chain
     try {
-      console.log("Calling createPool with:");
-      console.log("minDeposit:", minDeposit);
-      console.log("endTimestamp:", endTimestamp);
-      console.log("prizeDistribution:", prizeDistribution);
+      console.log("Calling createPool with:", {
+        minDeposit,
+        endTimestamp,
+        prizeDistribution,
+      });
 
       await program.methods
         .createPool(
@@ -115,18 +130,20 @@ export async function POST(req: NextRequest) {
         .rpc({ commitment: "confirmed" });
     } catch (err) {
       console.error("Create pool failed:", err);
+      return NextResponse.json({ error: "createPool failed" }, { status: 500 });
     }
 
+    // ✅ Create game record in DB
     const createdGame = await prisma.gameSession.create({
       data: {
-        poolId: poolPda.toBase58(), // store PDA, not the number
+        poolId: poolPda.toBase58(),
         poolIndex: poolCount,
         status: "WAITING",
         maxPlayers: 4,
         currentPlayers: 0,
-        entryFee: minDeposit / 1e9, // assuming lamports, store in SOL
+        entryFee: minDeposit / 1e9,
         prizePool: 0,
-        endTime: new Date(endTime), // ISO string or timestamp
+        endTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       },
     });
 

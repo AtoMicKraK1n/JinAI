@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import ParticleBackground from "@/components/ParticleBackground";
-import Navbar from "@/components/Navbar"; // Make sure you have this
+import Navbar from "@/components/Navbar";
 
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useConnection } from "@solana/wallet-adapter-react";
@@ -59,7 +59,7 @@ export default function AuthPage() {
       }
 
       localStorage.setItem("jwt", data.token);
-      router.push("/"); // or /host, /lobby, etc
+      router.push("/"); // or /host, /lobby
     } catch (err) {
       console.error("Login error:", err);
       setError("Failed to authenticate. Try again.");
