@@ -54,6 +54,23 @@ function setupSocketServer(io) {
           userId,
           username: participant.user.username,
         });
+
+        const allParticipants = await prisma.gameParticipant.findMany({
+          where: { gameId },
+          include: { user: true },
+        });
+
+        const existingPlayers = allParticipants.map((p) => ({
+          userId: p.userId,
+          username: p.user.username ?? `anon_${p.userId.slice(0, 4)}`,
+        }));
+
+        socket.emit("existing-players", existingPlayers);
+
+        if (existingPlayers.length === 4) {
+          console.log("🚀 4 players joined, sending start-game event");
+          io.to(gameId).emit("start-game");
+        }
       } catch (err) {
         console.error("❌ Token verification failed:", err);
         socket.emit("error", { message: "Invalid token" });

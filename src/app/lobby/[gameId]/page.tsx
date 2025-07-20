@@ -124,7 +124,6 @@ export default function LobbyPage() {
 
         console.log("✅ joinPool success:", txid);
 
-        // 🔊 Notify backend WebSocket
         socket.emit("join-game", { gameId, token });
       } catch (err: any) {
         console.error("Join error:", err);
@@ -139,7 +138,6 @@ export default function LobbyPage() {
 
     joinGame();
 
-    // 🎧 Listen for full lobby on initial join
     socket.on("existing-players", (playersList) => {
       console.log("📋 Existing players received:", playersList);
       setPlayers(
@@ -150,9 +148,9 @@ export default function LobbyPage() {
       );
     });
 
-    // 🎧 Update for new joiners
     socket.on("player-joined", (data) => {
       console.log("📥 player-joined:", data);
+      if (!data?.userId) return;
       setPlayers((prev) => {
         if (prev.some((p) => p.userId === data.userId)) return prev;
         return [
