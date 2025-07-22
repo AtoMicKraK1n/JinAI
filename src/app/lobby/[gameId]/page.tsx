@@ -8,12 +8,7 @@ import StartLobby from "@/components/StartLobby";
 import socket from "@/lib/socket";
 import Navbar from "@/components/Navbar";
 
-import {
-  Connection,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -26,17 +21,123 @@ export default function LobbyPage() {
   const router = useRouter();
   const [players, setPlayers] = useState<any[]>([]);
   const [joined, setJoined] = useState(false);
+  const [showConfirmation, setShowConfirmation] = useState(true); // UI shown first
+
   const { publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   const { toast } = useToast();
 
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("jwt") : null;
+
+  const joinGame = async () => {
+    try {
+      const res = await fetch("/api/games/join", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ gameId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toast({
+          variant: "destructive",
+          title: "Join failed",
+          description: data.error,
+        });
+        return;
+      }
+
+      const provider = new anchor.AnchorProvider(
+        connection,
+        {
+          publicKey,
+          signTransaction,
+          signAllTransactions: async (txs) =>
+            Promise.all(txs.map(signTransaction)),
+        },
+        { preflightCommitment: "confirmed" }
+      );
+
+      const program = new anchor.Program(
+        idl as anchor.Idl,
+        provider
+      ) as unknown as anchor.Program<JinaiHere>;
+
+      const poolIndex = new anchor.BN(data.game.poolIndex);
+      const LAMPORTS_PER_SOL = 1_000_000_000;
+      const depositAmount = new anchor.BN(
+        data.game.entryFee * LAMPORTS_PER_SOL
+      );
+
+      const [poolPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("pool"), poolIndex.toArrayLike(Buffer, "le", 8)],
+        program.programId
+      );
+      const [vaultPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("pool-vault"), poolIndex.toArrayLike(Buffer, "le", 8)],
+        program.programId
+      );
+      const [playerPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          poolIndex.toArrayLike(Buffer, "le", 8),
+          publicKey.toBuffer(),
+        ],
+        program.programId
+      );
+
+      const tx = await program.methods
+        .joinPool(depositAmount)
+        .accountsPartial({
+          pool: poolPda,
+          player: playerPda,
+          playerAuthority: publicKey,
+          poolVault: vaultPda,
+          systemProgram: SystemProgram.programId,
+        })
+        .transaction();
+
+      const { blockhash } = await connection.getLatestBlockhash("finalized");
+      tx.recentBlockhash = blockhash;
+      tx.feePayer = publicKey;
+
+      const signedTx = await signTransaction(tx);
+      const txid = await connection.sendRawTransaction(signedTx.serialize());
+      await connection.confirmTransaction(txid, "confirmed");
+
+      console.log("✅ joinPool success:", txid);
+      socket.emit("join-game", { gameId, token });
+    } catch (err: any) {
+      console.error("Join error:", err);
+      toast({
+        variant: "destructive",
+        title: "Error joining game",
+        description:
+          err.message || "Something went wrong while joining the game.",
+      });
+    }
+  };
+
+  const handleJoinConfirm = () => {
+    setShowConfirmation(false);
+  };
+
   useEffect(() => {
-    if (!gameId || !publicKey || !signTransaction || joined) return;
+    if (
+      !gameId ||
+      !publicKey ||
+      !signTransaction ||
+      joined ||
+      !token ||
+      showConfirmation
+    )
+      return;
 
     setJoined(true);
-
-    const token = localStorage.getItem("jwt");
-    if (!token) return;
 
     if (!socket.connected) socket.connect();
 
@@ -46,98 +147,6 @@ export default function LobbyPage() {
     socket.on("disconnect", () => {
       console.log("❌ Socket disconnected");
     });
-
-    const joinGame = async () => {
-      try {
-        const res = await fetch("/api/games/join", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ gameId }),
-        });
-
-        const data = await res.json();
-        if (!res.ok || !data.success) {
-          toast({
-            variant: "destructive",
-            title: "Join failed",
-            description: data.error,
-          });
-          return;
-        }
-
-        const provider = new anchor.AnchorProvider(
-          connection,
-          {
-            publicKey,
-            signTransaction,
-            signAllTransactions: async (txs) =>
-              Promise.all(txs.map(signTransaction)),
-          },
-          { preflightCommitment: "confirmed" }
-        );
-        const program = new anchor.Program(
-          idl as anchor.Idl,
-          provider
-        ) as unknown as anchor.Program<JinaiHere>;
-
-        const poolIndex = new anchor.BN(data.game.poolIndex);
-        const LAMPORTS_PER_SOL = 1_000_000_000;
-        const depositAmount = new anchor.BN(
-          data.game.entryFee * LAMPORTS_PER_SOL
-        );
-
-        const [poolPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("pool"), poolIndex.toArrayLike(Buffer, "le", 8)],
-          program.programId
-        );
-        const [vaultPda] = PublicKey.findProgramAddressSync(
-          [Buffer.from("pool-vault"), poolIndex.toArrayLike(Buffer, "le", 8)],
-          program.programId
-        );
-        const [playerPda] = PublicKey.findProgramAddressSync(
-          [
-            Buffer.from("player"),
-            poolIndex.toArrayLike(Buffer, "le", 8),
-            publicKey.toBuffer(),
-          ],
-          program.programId
-        );
-
-        const tx = await program.methods
-          .joinPool(depositAmount)
-          .accountsPartial({
-            pool: poolPda,
-            player: playerPda,
-            playerAuthority: publicKey,
-            poolVault: vaultPda,
-            systemProgram: SystemProgram.programId,
-          })
-          .transaction();
-
-        const { blockhash } = await connection.getLatestBlockhash("finalized");
-        tx.recentBlockhash = blockhash;
-        tx.feePayer = publicKey;
-
-        const signedTx = await signTransaction(tx);
-        const txid = await connection.sendRawTransaction(signedTx.serialize());
-        await connection.confirmTransaction(txid, "confirmed");
-
-        console.log("✅ joinPool success:", txid);
-
-        socket.emit("join-game", { gameId, token });
-      } catch (err: any) {
-        console.error("Join error:", err);
-        toast({
-          variant: "destructive",
-          title: "Error joining game",
-          description:
-            err.message || "Something went wrong while joining the game.",
-        });
-      }
-    };
 
     joinGame();
 
@@ -177,7 +186,7 @@ export default function LobbyPage() {
       socket.off("connect");
       socket.off("disconnect");
     };
-  }, [gameId, publicKey, signTransaction]);
+  }, [gameId, publicKey, signTransaction, showConfirmation]);
 
   return (
     <>
@@ -189,7 +198,24 @@ export default function LobbyPage() {
         transition={{ duration: 0.6 }}
         className="relative z-10 min-h-screen px-6 pt-32"
       >
-        <StartLobby players={players} />
+        {showConfirmation ? (
+          <div className="flex justify-center items-center h-[70vh]">
+            <div className="bg-black/60 backdrop-blur-md border border-yellow-500 rounded-xl p-10 w-full max-w-md text-center shadow-lg">
+              <h2 className="text-2xl font-bold text-yellow-400 mb-6">
+                💸 You will be charged 1.000 SOL and network fee to join this
+                pool
+              </h2>
+              <button
+                onClick={handleJoinConfirm}
+                className="neo-button bg-yellow-400 text-black font-semibold px-8 py-3 rounded-lg hover:bg-yellow-300 transition"
+              >
+                Confirm & Join Game
+              </button>
+            </div>
+          </div>
+        ) : (
+          <StartLobby players={players} />
+        )}
       </motion.div>
     </>
   );
