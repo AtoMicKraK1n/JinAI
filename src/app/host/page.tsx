@@ -38,7 +38,7 @@ export default function HostStartPage() {
               Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
-              entryFeeBps: 500,
+              entryFeeBps: 10000,
               minDeposit: 1 * 1e9, // 1 SOL
               endTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
               prizeDistribution: [40, 30, 10, 10],

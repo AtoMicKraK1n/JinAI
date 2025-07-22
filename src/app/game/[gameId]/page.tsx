@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { io, Socket } from "socket.io-client";
 import GameScreen from "@/components/GameScreen";
 import ParticleBackground from "@/components/ParticleBackground";
+import Navbar from "@/components/Navbar";
 import { useTimer } from "@/hooks/useTimer";
 import { getDifficultyColor } from "@/lib/utils";
 
@@ -17,6 +18,8 @@ export default function QuizGamePage() {
 
   const [players, setPlayers] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [userId, setUserId] = useState<string | null>(null);
+
   const [gameState, setGameState] = useState({
     currentQuestion: 0,
     totalQuestions: 0,
@@ -30,25 +33,23 @@ export default function QuizGamePage() {
     perfectAnswers: 0,
   });
 
-  const userId = useMemo(() => {
+  useEffect(() => {
+    // ✅ Parse JWT only on client
     try {
       const token = localStorage.getItem("jwt");
-      if (!token) return null;
+      if (!token) return;
 
       const payloadBase64 = token.split(".")[1];
-      if (!payloadBase64) return null;
+      if (!payloadBase64) return;
 
       const payload = JSON.parse(atob(payloadBase64));
-      return payload.userId;
+      setUserId(payload.userId);
     } catch (err) {
       console.error("Failed to parse JWT", err);
-      return null;
     }
   }, []);
 
-  const isHost = useMemo(() => {
-    return players[0]?.userId === userId;
-  }, [players, userId]);
+  const isHost = players[0]?.userId === userId;
 
   const { timeLeft } = useTimer({
     duration: 30,
@@ -113,7 +114,7 @@ export default function QuizGamePage() {
 
   const selectAnswer = (index: number) => {
     const currentQ = questions[gameState.currentQuestion];
-    const correct = currentQ.correctAnswer ?? null; // optional, use if included
+    const correct = currentQ.correctAnswer ?? null;
     const isCorrect = index === correct;
 
     setGameState((prev) => {
@@ -159,13 +160,14 @@ export default function QuizGamePage() {
 
   return (
     <>
+      <Navbar />
       <ParticleBackground />
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         className="relative z-10 min-h-screen"
       >
-        {questions.length > 0 && (
+        {questions.length > 0 ? (
           <GameScreen
             players={players}
             gameState={gameState}
@@ -175,6 +177,10 @@ export default function QuizGamePage() {
             nextQuestion={nextQuestion}
             getDifficultyColor={getDifficultyColor}
           />
+        ) : (
+          <div className="text-white text-center pt-24 text-xl">
+            Loading questions or something went wrong...
+          </div>
         )}
       </motion.div>
     </>
