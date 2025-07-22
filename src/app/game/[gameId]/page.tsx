@@ -89,6 +89,23 @@ export default function QuizGamePage() {
       );
     });
 
+    fetch(`/api/games/seed-questions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ gameId }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!data.success) {
+          console.warn("Seed questions skipped:", data?.error || data?.message);
+        } else {
+          console.log("✅ Questions seeded:", data.questionsSeeded);
+        }
+      });
+
     fetch(`/api/quiz/questions?gameId=${gameId}`, {
       headers: { Authorization: `Bearer ${token}` },
     })

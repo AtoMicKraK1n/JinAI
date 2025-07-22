@@ -45,7 +45,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Get game questions
     const gameQuestions = await prisma.gameQuestion.findMany({
       where: { gameId },
       include: {
@@ -59,7 +58,6 @@ export async function GET(request: NextRequest) {
             optionD: true,
             difficulty: true,
             category: true,
-            // Don't include correctAnswer for security
           },
         },
       },
@@ -67,6 +65,8 @@ export async function GET(request: NextRequest) {
         orderIndex: "asc",
       },
     });
+
+    console.log("Fetched gameQuestions:", gameQuestions);
 
     return NextResponse.json({
       success: true,
