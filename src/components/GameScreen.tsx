@@ -36,6 +36,7 @@ interface GameState {
   streak: number;
   timeLeft: number;
   multiplier: number;
+  correctAnswer?: number;
 }
 
 interface GameScreenProps {

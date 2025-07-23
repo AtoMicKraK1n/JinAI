@@ -7,9 +7,9 @@ import { IconUsers, IconFlame } from "@tabler/icons-react";
 interface Player {
   wallet: string;
   score: number;
-  avatar?: string; // Optional, just for UI icons
+  avatar?: string;
   isOnline?: boolean;
-  username?: string; // Optional if you want to label "You"
+  username?: string;
 }
 
 interface GameState {
@@ -65,7 +65,9 @@ const LiveLeaderboard: React.FC<LiveLeaderboardProps> = ({
             const isCurrentPlayer = player.username === "You";
             const displayName = isCurrentPlayer
               ? "You"
-              : `Player_${player.wallet.slice(0, 6)}`;
+              : player.wallet
+              ? `Player_${player.wallet.slice(0, 6)}`
+              : "Unknown Player";
 
             return (
               <motion.div
@@ -95,7 +97,7 @@ const LiveLeaderboard: React.FC<LiveLeaderboardProps> = ({
                   <p className="text-gray-400 text-xs">
                     {isCurrentPlayer
                       ? gameState.score.toLocaleString()
-                      : player.score.toLocaleString()}
+                      : (player.score ?? 0).toLocaleString()}
                   </p>
                 </div>
               </motion.div>

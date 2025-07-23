@@ -34,7 +34,6 @@ export default function QuizGamePage() {
   });
 
   useEffect(() => {
-    // ✅ Parse JWT only on client
     try {
       const token = localStorage.getItem("jwt");
       if (!token) return;
@@ -129,32 +128,69 @@ export default function QuizGamePage() {
     setGameState((prev) => ({ ...prev, timeLeft }));
   }, [timeLeft]);
 
-  const selectAnswer = (index: number) => {
-    const currentQ = questions[gameState.currentQuestion];
-    const correct = currentQ.correctAnswer ?? null;
-    const isCorrect = index === correct;
+  const selectAnswer = async (index: number) => {
+    if (gameState.answered) return;
 
-    setGameState((prev) => {
-      const nextScore = prev.score + (isCorrect ? 100 : 0);
-      return {
+    const token = localStorage.getItem("jwt");
+    if (!token) {
+      console.warn("JWT missing, cannot submit answer");
+      return;
+    }
+
+    const currentQ = questions[gameState.currentQuestion];
+    if (!currentQ) {
+      console.warn("No current question");
+      return;
+    }
+
+    const selectedOptionText = currentQ.options[index];
+
+    try {
+      const res = await fetch("/api/quiz/answer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          gameId,
+          questionId: currentQ.id, // ✅ send questionId instead of questionIndex
+          selectedAnswer: selectedOptionText,
+          responseTime: (30 - gameState.timeLeft) * 1000, // optional bonus
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        console.warn("Failed to submit answer:", data.message || data.error);
+        return;
+      }
+
+      const { isCorrect, points, correctAnswer } = data.result;
+
+      setGameState((prev) => ({
         ...prev,
         answered: true,
         selectedAnswer: index,
         isCorrect,
-        score: nextScore,
+        score: prev.score + points,
         streak: isCorrect ? prev.streak + 1 : 0,
         multiplier: isCorrect ? prev.multiplier + 1 : 1,
         perfectAnswers: isCorrect
           ? prev.perfectAnswers + 1
           : prev.perfectAnswers,
-      };
-    });
+        correctAnswer,
+      }));
 
-    socket.emit("score-update", {
-      gameId,
-      userId,
-      score: gameState.score + (isCorrect ? 100 : 0),
-    });
+      socket.emit("score-update", {
+        gameId,
+        userId,
+        score: gameState.score + points,
+      });
+    } catch (err) {
+      console.error("Error submitting answer:", err);
+    }
   };
 
   const nextQuestion = () => {

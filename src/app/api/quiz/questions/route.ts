@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Verify user is in this game
+    // Check if user is part of the game
     const participant = await prisma.gameParticipant.findFirst({
       where: {
         gameId,
@@ -33,12 +33,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log("User ID:", userId);
-    console.log("Game ID:", gameId);
-    console.log("Checking participation...");
-
     if (!participant) {
-      console.log("Not a participant:", { userId, gameId });
       return NextResponse.json(
         { error: "You are not a participant in this game" },
         { status: 403 }
@@ -56,6 +51,7 @@ export async function GET(request: NextRequest) {
             optionB: true,
             optionC: true,
             optionD: true,
+            correctAnswer: true,
             difficulty: true,
             category: true,
           },
@@ -66,19 +62,18 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    console.log("Fetched gameQuestions:", gameQuestions);
-
     return NextResponse.json({
       success: true,
       questions: gameQuestions.map((gq) => ({
         id: gq.question.id,
         question: gq.question.question,
-        options: {
-          A: gq.question.optionA,
-          B: gq.question.optionB,
-          C: gq.question.optionC,
-          D: gq.question.optionD,
-        },
+        options: [
+          gq.question.optionA,
+          gq.question.optionB,
+          gq.question.optionC,
+          gq.question.optionD,
+        ],
+        correctAnswer: gq.question.correctAnswer,
         difficulty: gq.question.difficulty,
         category: gq.question.category,
         timeLimit: gq.timeLimit,

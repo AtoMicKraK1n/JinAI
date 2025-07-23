@@ -89,6 +89,8 @@ export default function LobbyPage() {
         ],
         program.programId
       );
+      const { blockhash, lastValidBlockHeight } =
+        await connection.getLatestBlockhash("finalized");
 
       const tx = await program.methods
         .joinPool(depositAmount)
@@ -101,13 +103,26 @@ export default function LobbyPage() {
         })
         .transaction();
 
-      const { blockhash } = await connection.getLatestBlockhash("finalized");
       tx.recentBlockhash = blockhash;
       tx.feePayer = publicKey;
 
       const signedTx = await signTransaction(tx);
       const txid = await connection.sendRawTransaction(signedTx.serialize());
-      await connection.confirmTransaction(txid, "confirmed");
+
+      const confirmation = await connection.confirmTransaction(
+        {
+          signature: txid,
+          blockhash,
+          lastValidBlockHeight,
+        },
+        "confirmed"
+      );
+
+      if (confirmation.value.err) {
+        throw new Error(
+          "Transaction failed: " + JSON.stringify(confirmation.value.err)
+        );
+      }
 
       console.log("✅ joinPool success:", txid);
       socket.emit("join-game", { gameId, token });

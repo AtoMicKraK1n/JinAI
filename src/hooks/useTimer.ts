@@ -7,7 +7,6 @@ interface UseTimerOptions {
   isHost: boolean;
   socket: Socket | null;
   roomId: string;
-
   onExpire?: () => void;
   onTick?: (timeLeft: number) => void;
   dependencies?: any[];
@@ -26,15 +25,19 @@ export const useTimer = ({
   const [timeLeft, setTimeLeft] = useState(duration);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Host: emit tick updates
+  // ✅ Reset timer when question changes (dependencies change)
+  useEffect(() => {
+    setTimeLeft(duration);
+  }, [duration, ...dependencies]);
+
+  // ✅ Host emits timer updates
   useEffect(() => {
     if (!isRunning || !isHost || !socket) return;
-
-    setTimeLeft(duration);
 
     intervalRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         const next = prev - 1;
+
         if (next <= 0) {
           clearInterval(intervalRef.current!);
           socket.emit("timer-expired", { roomId });
@@ -49,10 +52,9 @@ export const useTimer = ({
     }, 1000);
 
     return () => clearInterval(intervalRef.current!);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRunning, isHost, socket, roomId, ...dependencies]);
+  }, [isRunning, isHost, socket, roomId]);
 
-  // Non-host: listen for updates from socket
+  // ✅ Non-host listens to host's timer
   useEffect(() => {
     if (!socket || isHost) return;
 
@@ -65,7 +67,7 @@ export const useTimer = ({
     socket.on("timer-update", handleUpdate);
 
     return () => {
-      socket.off("timer-update", handleUpdate);
+      socket.off("timer-update", handleUpdate); // ✅ now it's a void-returning cleanup
     };
   }, [socket, isHost, roomId]);
 

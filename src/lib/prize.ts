@@ -10,7 +10,6 @@ export async function calculateAndDistributePrizes(gameId: string) {
 
     if (!game) return;
 
-    // Get all participants
     const participants = await prisma.gameParticipant.findMany({
       where: { gameId },
       include: {
@@ -24,12 +23,10 @@ export async function calculateAndDistributePrizes(gameId: string) {
       },
     });
 
-    // Get all answers for the game
     const allAnswers = await prisma.playerAnswer.findMany({
       where: { gameId },
     });
 
-    // Aggregate score and stats
     const results = participants.map((p) => {
       const answers = allAnswers.filter((a) => a.userId === p.userId);
       const totalScore = answers.reduce((sum, a) => sum + a.points, 0);
@@ -45,10 +42,8 @@ export async function calculateAndDistributePrizes(gameId: string) {
       };
     });
 
-    // Sort by score (desc)
     results.sort((a, b) => b.totalScore - a.totalScore);
 
-    // Prize distribution config
     const prizeDistribution = {
       1: 0.6,
       2: 0.25,
@@ -56,7 +51,6 @@ export async function calculateAndDistributePrizes(gameId: string) {
       4: 0.05,
     };
 
-    // Update participants with rank and prize
     for (let i = 0; i < results.length; i++) {
       const rank = i + 1;
       const prizePercentage =
