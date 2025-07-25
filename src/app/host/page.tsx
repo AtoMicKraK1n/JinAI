@@ -12,7 +12,7 @@ export default function HostStartPage() {
 
   useEffect(() => {
     const checkOrCreateGame = async () => {
-      const token = localStorage.getItem("jwt");
+      const token = sessionStorage.getItem("jwt");
       if (!token) {
         alert("Please log in first.");
         router.push("/auth");
@@ -40,7 +40,7 @@ export default function HostStartPage() {
             body: JSON.stringify({
               entryFeeBps: 10000,
               minDeposit: 1 * 1e9, // 1 SOL
-              endTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+              endTime: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
               prizeDistribution: [40, 30, 10, 10],
             }),
           });

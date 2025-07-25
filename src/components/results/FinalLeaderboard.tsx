@@ -11,7 +11,7 @@ import {
 interface Player {
   id: string;
   wallet: string;
-  avatar: string;
+  avatar?: string;
   username: string;
   score: number;
 }

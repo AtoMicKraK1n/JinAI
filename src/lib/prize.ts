@@ -45,10 +45,10 @@ export async function calculateAndDistributePrizes(gameId: string) {
     results.sort((a, b) => b.totalScore - a.totalScore);
 
     const prizeDistribution = {
-      1: 0.6,
-      2: 0.25,
+      1: 0.4,
+      2: 0.3,
       3: 0.1,
-      4: 0.05,
+      4: 0.1,
     };
 
     for (let i = 0; i < results.length; i++) {

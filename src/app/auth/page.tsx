@@ -58,8 +58,8 @@ export default function AuthPage() {
         return;
       }
 
-      localStorage.setItem("jwt", data.token);
-      router.push("/"); // or /host, /lobby
+      sessionStorage.setItem("jwt", data.token);
+      router.push("/host");
     } catch (err) {
       console.error("Login error:", err);
       setError("Failed to authenticate. Try again.");

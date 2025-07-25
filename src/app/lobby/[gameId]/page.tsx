@@ -21,14 +21,14 @@ export default function LobbyPage() {
   const router = useRouter();
   const [players, setPlayers] = useState<any[]>([]);
   const [joined, setJoined] = useState(false);
-  const [showConfirmation, setShowConfirmation] = useState(true); // UI shown first
+  const [showConfirmation, setShowConfirmation] = useState(true);
 
   const { publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
   const { toast } = useToast();
 
   const token =
-    typeof window !== "undefined" ? localStorage.getItem("jwt") : null;
+    typeof window !== "undefined" ? sessionStorage.getItem("jwt") : null;
 
   const joinGame = async () => {
     try {
@@ -127,12 +127,22 @@ export default function LobbyPage() {
       console.log("✅ joinPool success:", txid);
       socket.emit("join-game", { gameId, token });
     } catch (err: any) {
+      const errMsg = err?.message || "";
+
+      if (errMsg.includes("This transaction has already been processed")) {
+        console.warn(
+          "this transaction has successfully landed onchain , proceeding..."
+        );
+
+        socket.emit("join-game", { gameId, token });
+        return;
+      }
+
       console.error("Join error:", err);
       toast({
         variant: "destructive",
         title: "Error joining game",
-        description:
-          err.message || "Something went wrong while joining the game.",
+        description: errMsg || "Something went wrong while joining the game.",
       });
     }
   };

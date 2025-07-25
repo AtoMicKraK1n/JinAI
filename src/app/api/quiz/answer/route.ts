@@ -23,14 +23,23 @@ export async function POST(request: NextRequest) {
       responseTime = 0,
     } = await request.json();
 
-    if (!gameId || !questionId || !selectedAnswer) {
+    if (
+      !gameId ||
+      !questionId ||
+      selectedAnswer === undefined ||
+      typeof selectedAnswer !== "number" ||
+      selectedAnswer < 0 ||
+      selectedAnswer > 3
+    ) {
       return NextResponse.json(
-        { error: "Game ID, question ID, and selected answer are required" },
+        {
+          error:
+            "Game ID, question ID, and valid selected answer index (0-3) are required",
+        },
         { status: 400 }
       );
     }
 
-    // Check participation
     const participant = await prisma.gameParticipant.findFirst({
       where: { gameId, userId },
     });
@@ -42,7 +51,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Prevent duplicate answers
+    console.log("🔍 Attempting answer", { gameId, userId, questionId });
+
     const existingAnswer = await prisma.playerAnswer.findFirst({
       where: { gameId, userId, questionId },
     });
@@ -54,7 +64,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if question exists
     const question = await prisma.question.findUnique({
       where: { id: questionId },
     });
@@ -66,9 +75,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const isCorrect = selectedAnswer === question.correctAnswer;
+    const answerMap = ["A", "B", "C", "D"];
+    const selectedLetter = answerMap[selectedAnswer];
 
-    // Points logic
+    console.log("🧪 DEBUG - Answer Comparison", {
+      userId,
+      questionId,
+      selectedAnswer,
+      selectedLetter,
+      correctAnswer: question.correctAnswer,
+    });
+
+    const isCorrect = selectedLetter === question.correctAnswer;
+    console.log("✅ Answer is correct?", isCorrect);
+
     let points = 0;
     if (isCorrect) {
       const basePoints = 100;
@@ -76,20 +96,18 @@ export async function POST(request: NextRequest) {
       points = basePoints + speedBonus;
     }
 
-    // Save answer
     await prisma.playerAnswer.create({
       data: {
         gameId,
         userId,
         questionId,
-        selectedAnswer,
+        selectedAnswer: selectedLetter,
         isCorrect,
         responseTime,
         points,
       },
     });
 
-    // Update game status from STARTING to IN_PROGRESS
     const game = await prisma.gameSession.findUnique({
       where: { id: gameId },
     });
@@ -101,7 +119,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // ✅ AUTO-COMPLETE GAME IF ALL ANSWERS SUBMITTED
     if (game && game.status !== "COMPLETED") {
       const totalQuestions = await prisma.question.count();
       const participants = await prisma.gameParticipant.findMany({
@@ -121,8 +138,6 @@ export async function POST(request: NextRequest) {
         });
 
         console.log(`✅ Game ${gameId} marked as COMPLETED.`);
-
-        // 🏆 Distribute prizes
         await calculateAndDistributePrizes(gameId);
       }
     }
@@ -137,7 +152,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Submit answer error:", error);
+    console.error("❌ Submit answer error:", error);
     return NextResponse.json(
       { error: "Failed to submit answer" },
       { status: 500 }

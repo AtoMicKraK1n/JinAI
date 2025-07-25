@@ -12,18 +12,31 @@ import { getDifficultyColor } from "@/lib/utils";
 
 const socket: Socket = io("http://localhost:4000");
 
+function getCurrentUserId(): string | null {
+  try {
+    const token = sessionStorage.getItem("jwt");
+    if (!token) return null;
+    const payloadBase64 = token.split(".")[1];
+    if (!payloadBase64) return null;
+    const payload = JSON.parse(atob(payloadBase64));
+    return payload.userId;
+  } catch (err) {
+    console.error("JWT decode failed", err);
+    return null;
+  }
+}
+
 export default function QuizGamePage() {
   const { gameId } = useParams();
   const router = useRouter();
 
   const [players, setPlayers] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
 
   const [gameState, setGameState] = useState({
     currentQuestion: 0,
     totalQuestions: 0,
-    answered: false,
     isCorrect: false,
     selectedAnswer: null,
     score: 0,
@@ -31,35 +44,23 @@ export default function QuizGamePage() {
     timeLeft: 30,
     multiplier: 1,
     perfectAnswers: 0,
+    correctAnswer: null,
   });
 
-  useEffect(() => {
-    try {
-      const token = localStorage.getItem("jwt");
-      if (!token) return;
+  const [answered, setAnswered] = useState(false);
 
-      const payloadBase64 = token.split(".")[1];
-      if (!payloadBase64) return;
-
-      const payload = JSON.parse(atob(payloadBase64));
-      setUserId(payload.userId);
-    } catch (err) {
-      console.error("Failed to parse JWT", err);
-    }
-  }, []);
-
-  const isHost = players[0]?.userId === userId;
+  const isHost = players[0]?.userId === getCurrentUserId();
 
   const { timeLeft } = useTimer({
     duration: 30,
-    isRunning: !gameState.answered,
+    isRunning,
     isHost,
     roomId: gameId as string,
     socket,
     onExpire: () => {
+      setAnswered(true);
       setGameState((prev) => ({
         ...prev,
-        answered: true,
         selectedAnswer: null,
         isCorrect: false,
       }));
@@ -68,7 +69,7 @@ export default function QuizGamePage() {
   });
 
   useEffect(() => {
-    const token = localStorage.getItem("jwt");
+    const token = sessionStorage.getItem("jwt");
     if (!token || !gameId) return;
 
     socket.emit("join-game", { gameId, token });
@@ -86,6 +87,11 @@ export default function QuizGamePage() {
           p.userId === data.userId ? { ...p, score: data.score } : p
         )
       );
+    });
+
+    socket.on("start-game", () => {
+      console.log("🔥 Game started");
+      setIsRunning(true);
     });
 
     fetch(`/api/games/seed-questions`, {
@@ -116,6 +122,10 @@ export default function QuizGamePage() {
             ...prev,
             totalQuestions: data.questions.length,
           }));
+
+          if (isHost) {
+            socket.emit("start-game", { roomId: gameId });
+          }
         }
       });
 
@@ -128,11 +138,16 @@ export default function QuizGamePage() {
     setGameState((prev) => ({ ...prev, timeLeft }));
   }, [timeLeft]);
 
-  const selectAnswer = async (index: number) => {
-    if (gameState.answered) return;
+  useEffect(() => {
+    setAnswered(false);
+  }, [gameState.currentQuestion]);
 
-    const token = localStorage.getItem("jwt");
-    if (!token) {
+  const selectAnswer = async (index: number) => {
+    if (answered) return;
+
+    const token = sessionStorage.getItem("jwt");
+    const userId = getCurrentUserId();
+    if (!token || !userId) {
       console.warn("JWT missing, cannot submit answer");
       return;
     }
@@ -154,9 +169,9 @@ export default function QuizGamePage() {
         },
         body: JSON.stringify({
           gameId,
-          questionId: currentQ.id, // ✅ send questionId instead of questionIndex
-          selectedAnswer: selectedOptionText,
-          responseTime: (30 - gameState.timeLeft) * 1000, // optional bonus
+          questionId: currentQ.id,
+          selectedAnswer: index,
+          responseTime: (30 - gameState.timeLeft) * 1000,
         }),
       });
 
@@ -169,9 +184,10 @@ export default function QuizGamePage() {
 
       const { isCorrect, points, correctAnswer } = data.result;
 
+      setAnswered(true);
+
       setGameState((prev) => ({
         ...prev,
-        answered: true,
         selectedAnswer: index,
         isCorrect,
         score: prev.score + points,
@@ -201,9 +217,9 @@ export default function QuizGamePage() {
       setGameState((prev) => ({
         ...prev,
         currentQuestion: next,
-        answered: false,
-        isCorrect: false,
         selectedAnswer: null,
+        isCorrect: false,
+        correctAnswer: null,
         timeLeft: 30,
       }));
     }
@@ -223,7 +239,7 @@ export default function QuizGamePage() {
         {questions.length > 0 ? (
           <GameScreen
             players={players}
-            gameState={gameState}
+            gameState={{ ...gameState, answered }}
             question={questions[gameState.currentQuestion]}
             selectAnswer={selectAnswer}
             getAnswerButtonStyle={getAnswerButtonStyle}

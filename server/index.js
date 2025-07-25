@@ -5,7 +5,6 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
-// Create HTTP server and Socket.IO instance
 const httpServer = createServer();
 const io = new Server(httpServer, {
   cors: {
@@ -13,13 +12,14 @@ const io = new Server(httpServer, {
   },
 });
 
+global.io = io;
+
 setupSocketServer(io);
 
 httpServer.listen(4000, () => {
   console.log("✅ WebSocket server running on port 4000");
 });
 
-// Setup Socket.IO event handlers
 function setupSocketServer(io) {
   io.on("connection", (socket) => {
     console.log(`🔌 Player connected: ${socket.id}`);
@@ -43,16 +43,16 @@ function setupSocketServer(io) {
         socket.data.userId = userId;
         socket.data.gameId = gameId;
 
-        console.log(`🎮 ${participant.user.username} joined game ${gameId}`);
+        const username =
+          participant.user.username || `Player_${userId.slice(-4)}`;
+
+        console.log(`🎮 ${username} joined game ${gameId}`);
         console.log("✅ join-game triggered with:", gameId, userId);
-        console.log("📤 Emitting player-joined:", {
-          userId,
-          username: participant.user.username,
-        });
+        console.log("📤 Emitting player-joined:", { userId, username });
 
         io.to(gameId).emit("player-joined", {
           userId,
-          username: participant.user.username,
+          username,
         });
 
         const allParticipants = await prisma.gameParticipant.findMany({
@@ -62,7 +62,7 @@ function setupSocketServer(io) {
 
         const existingPlayers = allParticipants.map((p) => ({
           userId: p.userId,
-          username: p.user.username ?? `anon_${p.userId.slice(0, 4)}`,
+          username: p.user.username || `Player_${p.userId.slice(-4)}`,
         }));
 
         socket.emit("existing-players", existingPlayers);
@@ -117,14 +117,14 @@ function setupSocketServer(io) {
       });
     });
 
-    socket.on("player-joined", ({ gameId, playerId }) => {
+    socket.on("player-joined", ({ gameId, playerId, username }) => {
+      const safeName = username || `Player_${playerId.slice(-4)}`;
       io.to(gameId).emit("player-joined", {
-        userId,
-        username: participant.user.username,
+        userId: playerId,
+        username: safeName,
       });
     });
 
-    // ✅ New: Real-time timer sync
     socket.on("timer-update", ({ roomId, timeLeft }) => {
       io.to(roomId).emit("timer-update", { roomId, timeLeft });
     });

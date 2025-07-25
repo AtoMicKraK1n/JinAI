@@ -4,8 +4,8 @@ import jwt from "jsonwebtoken";
 import { PublicKey, SystemProgram, Keypair } from "@solana/web3.js";
 import * as anchor from "@coral-xyz/anchor";
 import bs58 from "bs58";
-import idl from "@/app/lib/IDL.json";
-import { JinaiHere } from "@/app/lib/program";
+import idl from "@/lib/IDL.json";
+import { JinaiHere } from "@/lib/program";
 
 const prisma = new PrismaClient();
 const PROGRAM_ID = new PublicKey(idl.address);
@@ -47,14 +47,31 @@ export async function GET(request: NextRequest) {
     if (!game)
       return NextResponse.json({ error: "Game not found" }, { status: 404 });
 
-    // Calculate results
+    const isHost = game.participants[0]?.userId === userId;
+    if (!isHost) {
+      return NextResponse.json(
+        { error: "Only host can finalize results" },
+        { status: 403 }
+      );
+    }
+
+    if (game.status === "COMPLETED") {
+      const results = await prisma.gameParticipant.findMany({
+        where: { gameId },
+        include: { user: { select: { username: true } } },
+        orderBy: { finalRank: "asc" },
+      });
+      return NextResponse.json({
+        success: true,
+        message: "Already completed",
+        results,
+      });
+    }
+
     const results = await Promise.all(
       game.participants.map(async (participant) => {
         const answers = await prisma.playerAnswer.findMany({
-          where: {
-            gameId,
-            userId: participant.userId,
-          },
+          where: { gameId, userId: participant.userId },
         });
 
         const totalScore = answers.reduce((sum, a) => sum + a.points, 0);
@@ -73,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     results.sort((a, b) => b.totalScore - a.totalScore);
 
-    const prizeDistribution = { 1: 0.5, 2: 0.2, 3: 0.1, 4: 0.1 };
+    const prizeDistribution = { 1: 0.4, 2: 0.3, 3: 0.1, 4: 0.1 };
     const playerRanks: number[] = [];
 
     for (let i = 0; i < results.length; i++) {
@@ -90,7 +107,12 @@ export async function GET(request: NextRequest) {
       playerRanks.push(rank);
     }
 
-    // -------------------- 🔗 On-chain logic --------------------
+    await prisma.gameSession.update({
+      where: { id: gameId },
+      data: { status: "COMPLETED" },
+    });
+
+    // 🧠 On-chain logic
     const poolIndex = game.poolIndex;
     const RPC_URL = process.env.HELIUS_RPC_KEY
       ? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_RPC_KEY}`
@@ -121,7 +143,7 @@ export async function GET(request: NextRequest) {
     const program = new anchor.Program(
       idl as anchor.Idl,
       provider
-    ) as anchor.Program<JinaiHere>;
+    ) as unknown as anchor.Program<JinaiHere>;
 
     const [poolPda] = PublicKey.findProgramAddressSync(
       [
@@ -157,7 +179,7 @@ export async function GET(request: NextRequest) {
       )
     );
 
-    // First call: ✅ set_results
+    // ✅ set_results
     await program.methods
       .setResults(playerRanks as [number, number, number, number])
       .accountsPartial({
@@ -172,7 +194,7 @@ export async function GET(request: NextRequest) {
       .signers([inGameKeypair])
       .rpc({ commitment: "confirmed" });
 
-    // Then call: ✅ t_rewards
+    // ✅ t_rewards
     await program.methods
       .tRewards()
       .accountsPartial({
@@ -190,15 +212,21 @@ export async function GET(request: NextRequest) {
       .signers([inGameKeypair])
       .rpc({ commitment: "confirmed" });
 
+    const finalResults = await prisma.gameParticipant.findMany({
+      where: { gameId },
+      include: { user: { select: { username: true } } },
+      orderBy: { finalRank: "asc" },
+    });
+
     return NextResponse.json({
       success: true,
-      message: "Results saved and rewards distributed on-chain",
-      results,
+      message: "Game completed. Results finalized and rewards distributed.",
+      results: finalResults,
     });
   } catch (error) {
-    console.error("Get results error:", error);
+    console.error("Results error:", error);
     return NextResponse.json(
-      { error: "Failed to get results and distribute rewards" },
+      { error: "Failed to finalize results" },
       { status: 500 }
     );
   }

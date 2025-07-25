@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
         currentPlayers: 0,
         entryFee: minDeposit / 1e9,
         prizePool: 0,
-        endTime: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        endTime: new Date(Date.now() + 20 * 60 * 1000).toISOString(),
       },
     });
 

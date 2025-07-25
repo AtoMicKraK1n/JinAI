@@ -120,7 +120,7 @@ const StartLobby: React.FC<StartLobbyProps> = ({ players }) => {
 
           <div className="mt-4 p-3 bg-golden-400/10 rounded-lg border border-golden-400/30">
             <p className="text-golden-400 text-sm text-center">
-              🔥 Match starting in 30 seconds...
+              🔥 Waiting for all players to join...
             </p>
           </div>
         </div>

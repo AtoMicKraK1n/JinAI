@@ -91,7 +91,7 @@ const HeroSection: React.FC = () => {
             transition={{ duration: 0.8, delay: 0.6 }}
           >
             <motion.button
-              onClick={() => router.push("/quiz")}
+              onClick={() => router.push("/auth")}
               className="neo-button bg-gradient-to-r from-jingold to-jingold-dark text-jinblack text-lg px-8 py-4 font-bold flex items-center gap-2"
               whileHover={{ scale: 1.05, y: -2 }}
               whileTap={{ scale: 0.95 }}
