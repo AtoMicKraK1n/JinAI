@@ -15,23 +15,23 @@ const games = [
     id: 1,
     title: "GTA V",
     description:
-      "Challenge your knowledge of Los Santos and prove you're the ultimate GTA expert.",
+      "Train your knowledge of Los Santos and prove you're the ultimate GTA expert.",
     image: "/gtavr.jpg",
     isAvailable: true,
-    difficulty: "Medium" as const,
-    players: 1500,
-    rating: 4.8,
+    // difficulty: "Medium" as const,
+    // players: 1500,
+    // rating: 4.8,
   },
   {
     id: 2,
     title: "God of War",
     description:
-      "Test your expertise in Norse mythology and Kratos' epic journey.",
+      "Train your expertise in Norse mythology and Kratos' epic journey.",
     image: "/gowr.jpg",
     isAvailable: false,
-    difficulty: "Hard" as const,
-    players: 800,
-    rating: 4.9,
+    // difficulty: "Hard" as const,
+    // players: 800,
+    // rating: 4.9,
   },
   {
     id: 3,
@@ -40,9 +40,9 @@ const games = [
       "Race through questions about cars, tracks, and legendary moments.",
     image: "/nfsr.jpg",
     isAvailable: false,
-    difficulty: "Easy" as const,
-    players: 600,
-    rating: 4.6,
+    // difficulty: "Easy" as const,
+    // players: 600,
+    // rating: 4.6,
   },
   {
     id: 4,
@@ -51,29 +51,29 @@ const games = [
       "Prove your mastery of samurai lore and feudal Japanese history.",
     image: "/gotr.jpg",
     isAvailable: false,
-    difficulty: "Medium" as const,
-    players: 450,
-    rating: 4.7,
+    // difficulty: "Medium" as const,
+    // players: 450,
+    // rating: 4.7,
   },
   {
     id: 5,
     title: "Call of Duty",
-    description: "Test your tactical knowledge and CoD series expertise.",
+    description: "Train your tactical knowledge and CoD series expertise.",
     image: "/codr.jpg",
     isAvailable: false,
-    difficulty: "Hard" as const,
-    players: 2000,
-    rating: 4.5,
+    // difficulty: "Hard" as const,
+    // players: 2000,
+    // rating: 4.5,
   },
   {
     id: 6,
     title: "Minecraft",
-    description: "Challenge your crafting knowledge and survival skills.",
+    description: "Train your crafting knowledge and survival skills.",
     image: "/minecraftr.jpg",
     isAvailable: false,
-    difficulty: "Easy" as const,
-    players: 3000,
-    rating: 4.9,
+    // difficulty: "Easy" as const,
+    // players: 3000,
+    // rating: 4.9,
   },
 ];
 
@@ -120,11 +120,12 @@ const Index = () => {
               transition={{ duration: 0.8 }}
             >
               <h2 className="text-4xl md:text-5xl font-bold futuristic-text text-jingold mb-4">
-                Choose Your Arena
+                Choose Your AI
               </h2>
               <p className="text-xl text-gray-300 max-w-2xl mx-auto">
-                Select from our collection of popular games and test your
-                knowledge against players worldwide
+                Select from our collection of popular games AI and train
+                yourself to become a gaming expert. Each game offers unique
+                EXPERIENCE
               </p>
             </motion.div>
 

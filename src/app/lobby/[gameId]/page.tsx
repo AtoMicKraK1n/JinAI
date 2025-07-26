@@ -228,7 +228,7 @@ export default function LobbyPage() {
             <div className="bg-black/60 backdrop-blur-md border border-yellow-500 rounded-xl p-10 w-full max-w-md text-center shadow-lg">
               <h2 className="text-2xl font-bold text-yellow-400 mb-6">
                 💸 You will be charged 1.000 SOL and network fee to join this
-                pool
+                pool (ofc devnet)
               </h2>
               <button
                 onClick={handleJoinConfirm}

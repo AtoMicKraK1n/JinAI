@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ParticleBackground from "@/components/ParticleBackground";
 import { motion } from "framer-motion";
@@ -9,8 +9,12 @@ import Navbar from "@/components/Navbar";
 export default function HostStartPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
+  const hasRunRef = useRef(false);
 
   useEffect(() => {
+    if (hasRunRef.current) return;
+    hasRunRef.current = true;
+
     const checkOrCreateGame = async () => {
       const token = sessionStorage.getItem("jwt");
       if (!token) {
@@ -20,17 +24,14 @@ export default function HostStartPage() {
       }
 
       try {
-        // ✅ Try to fetch latest WAITING game
         const res = await fetch("/api/games/latest", {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await res.json();
 
         if (res.ok && data?.gameId) {
-          //Join existing WAITING game
           router.push(`/lobby/${data.gameId}`);
         } else {
-          //Create new game if no joinable one
           const createRes = await fetch("/api/games/create", {
             method: "POST",
             headers: {
@@ -70,12 +71,18 @@ export default function HostStartPage() {
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="relative z-10 min-h-screen flex items-center justify-center"
+        transition={{ duration: 0.6 }}
+        className="relative z-10 min-h-screen px-6 pt-32"
       >
-        <div className="bg-black/60 p-10 rounded-lg border border-gray-700 shadow-lg text-center">
-          <h1 className="text-4xl font-bold text-golden-400 mb-6">
-            {loading ? "Checking for existing game..." : "Redirecting..."}
-          </h1>
+        <div className="flex justify-center items-center h-[70vh]">
+          <div className="bg-black/90 backdrop-blur-md border border-yellow-500 rounded-xl p-10 w-full max-w-md text-center shadow-2xl">
+            <h1 className="text-3xl font-semibold text-yellow-400 mb-4 font-sans antialiased">
+              {loading ? "Checking for existing game..." : "Redirecting..."}
+            </h1>
+            <p className="text-gray-400">
+              Please wait while we prepare your quiz session.
+            </p>
+          </div>
         </div>
       </motion.div>
     </>

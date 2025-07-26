@@ -95,7 +95,13 @@ export default function AuthPage() {
             onClick={handleLogin}
             className="neo-button w-full bg-golden-400 text-black font-semibold py-2 px-4 rounded hover:bg-golden-500 transition"
           >
-            {loading ? "Signing in..." : "🔐 Sign In"}
+            {loading ? (
+              <div className="flex items-center justify-center">
+                <div className="loader" />
+              </div>
+            ) : (
+              "🔐 Sign In"
+            )}
           </button>
 
           {error && (

@@ -129,7 +129,7 @@ export const GameCard = ({ game, onClick }: GameCardProps) => {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            {game.isAvailable ? "Play Now" : "Coming Soon"}
+            {game.isAvailable ? "Chat Now" : "Coming Soon"}
           </motion.button>
         </div>
       </div>
