@@ -18,6 +18,15 @@ interface GameState {
   perfectAnswers: number;
 }
 
+interface ResultFromAPI {
+  userId: string;
+  walletAddress: string;
+  username: string;
+  totalScore?: number;
+  correctAnswers?: number;
+  totalAnswers?: number;
+}
+
 export default function ResultsPage() {
   const { gameId } = useParams();
   const router = useRouter();
@@ -48,30 +57,42 @@ export default function ResultsPage() {
         }
 
         const myId = getUserIdFromJWT(token);
-        const me = data.results.find((r: any) => r.userId === myId);
+        const me: ResultFromAPI | undefined = data.results.find(
+          (r: ResultFromAPI) => r.userId === myId
+        );
 
         if (me) {
+          const score = me.totalScore ?? 0;
+          const correctAnswers = me.correctAnswers ?? 0;
+          const totalAnswers = me.totalAnswers ?? 0;
+
           setGameState({
-            score: me.totalScore,
-            streak: 0, // if you want streak, you'd need to fetch it from backend
-            perfectAnswers: me.correctAnswers, // assumes perfect = correct
+            score,
+            streak: 0,
+            perfectAnswers: correctAnswers,
           });
 
-          const acc = me.totalAnswers
-            ? Math.round((me.correctAnswers / me.totalAnswers) * 100)
-            : 0;
+          const acc =
+            totalAnswers > 0
+              ? Math.round((correctAnswers / totalAnswers) * 100)
+              : 0;
 
           setAccuracy(acc);
         }
 
-        const formattedPlayers = data.results.map((r: any) => ({
-          id: r.userId,
-          username: r.username,
-          wallet: r.walletAddress,
-          score: r.totalScore,
-        }));
+        const formattedPlayers: Player[] = data.results.map(
+          (r: ResultFromAPI) => ({
+            id: r.userId,
+            username: r.username ?? "Player",
+            wallet: r.walletAddress ?? "",
+            score: r.totalScore ?? 0,
+          })
+        );
 
         setPlayers(formattedPlayers);
+      })
+      .catch((err) => {
+        console.error("Failed to fetch results:", err);
       })
       .finally(() => setLoading(false));
   }, [gameId]);

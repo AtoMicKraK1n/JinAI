@@ -78,7 +78,8 @@ const FinalLeaderboard: React.FC<FinalLeaderboardProps> = ({
                     )}
                   </div>
                   <p className="text-gray-400 text-sm">
-                    {finalScore.toLocaleString()} pts
+                    {gameState.score ? gameState.score.toLocaleString() : "0"}{" "}
+                    pts
                   </p>
                 </div>
                 {index < 3 && (

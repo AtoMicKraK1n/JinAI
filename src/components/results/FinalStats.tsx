@@ -31,7 +31,7 @@ const FinalStats: React.FC<FinalStatsProps> = ({ gameState, accuracy }) => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-4">
           <StatItem
             label="Final Score"
-            value={gameState.score.toLocaleString()}
+            value={gameState.score?.toLocaleString?.() ?? "0"}
             color="golden"
             delay={1}
           />

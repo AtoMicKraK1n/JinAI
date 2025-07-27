@@ -1,75 +1,69 @@
-import { useState, useEffect, useRef } from "react";
-import { Socket } from "socket.io-client";
+import { useEffect, useRef, useState } from "react";
 
-interface UseTimerOptions {
+interface UseTimerProps {
   duration: number;
   isRunning: boolean;
   isHost: boolean;
-  socket: Socket | null;
   roomId: string;
-  onExpire?: () => void;
-  onTick?: (timeLeft: number) => void;
+  socket: any;
+  onExpire: () => void;
   dependencies?: any[];
 }
 
-export const useTimer = ({
+// useTimer.ts
+export function useTimer({
   duration,
   isRunning,
   isHost,
-  socket,
   roomId,
+  socket,
   onExpire,
-  onTick,
   dependencies = [],
-}: UseTimerOptions) => {
+}: UseTimerProps) {
   const [timeLeft, setTimeLeft] = useState(duration);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ✅ Reset timer when question changes (dependencies change)
-  useEffect(() => {
+  const clearTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const startTimer = () => {
+    clearTimer();
     setTimeLeft(duration);
-  }, [duration, ...dependencies]);
 
-  // ✅ Host emits timer updates
-  useEffect(() => {
-    if (!isRunning || !isHost || !socket) return;
+    if (isHost) {
+      socket.emit("timer-sync", { roomId, timeLeft: duration });
+    }
 
-    intervalRef.current = setInterval(() => {
+    timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
-        const next = prev - 1;
-
-        if (next <= 0) {
-          clearInterval(intervalRef.current!);
-          socket.emit("timer-expired", { roomId });
-          onExpire?.();
+        if (prev <= 1) {
+          clearTimer();
+          onExpire();
           return 0;
         }
-
-        socket.emit("timer-update", { roomId, timeLeft: next });
-        onTick?.(next);
-        return next;
+        return prev - 1;
       });
     }, 1000);
+  };
 
-    return () => clearInterval(intervalRef.current!);
-  }, [isRunning, isHost, socket, roomId]);
-
-  // ✅ Non-host listens to host's timer
+  // sync from host
   useEffect(() => {
-    if (!socket || isHost) return;
-
-    const handleUpdate = (data: { roomId: string; timeLeft: number }) => {
-      if (data.roomId === roomId) {
-        setTimeLeft(data.timeLeft);
-      }
+    const handleTimerSync = ({ timeLeft: synced }) => {
+      setTimeLeft(synced);
     };
+    socket.on("timer-sync", handleTimerSync);
+    return () => socket.off("timer-sync", handleTimerSync);
+  }, []);
 
-    socket.on("timer-update", handleUpdate);
+  // run timer if game started
+  useEffect(() => {
+    if (isRunning) startTimer();
+    else clearTimer();
+  }, [isRunning, ...dependencies]);
 
-    return () => {
-      socket.off("timer-update", handleUpdate); // ✅ now it's a void-returning cleanup
-    };
-  }, [socket, isHost, roomId]);
-
-  return { timeLeft, isExpired: timeLeft === 0 };
-};
+  return { timeLeft, startTimer };
+}

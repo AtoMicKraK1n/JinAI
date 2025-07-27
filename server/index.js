@@ -133,6 +133,20 @@ function setupSocketServer(io) {
       io.to(roomId).emit("timer-expired", { roomId });
     });
 
+    // ✅ NEW: next-question handler
+    socket.on("next-question", (index) => {
+      const gameId = socket.data.gameId;
+      if (!gameId) {
+        console.warn("❌ No gameId found on socket, can't emit next-question");
+        return;
+      }
+
+      console.log(
+        `➡️ Host triggered next-question ${index} for game ${gameId}`
+      );
+      io.to(gameId).emit("next-question", index);
+    });
+
     socket.on("disconnect", () => {
       console.log(`❌ Player disconnected: ${socket.id}`);
       if (socket.data?.gameId && socket.data?.userId) {

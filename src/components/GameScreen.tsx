@@ -10,7 +10,7 @@ import Explanation from "./game/Explanation";
 import NextButton from "./game/NextButton";
 
 interface Player {
-  wallet: string;
+  userId: string;
   score: number;
   avatar?: string;
   isOnline?: boolean;

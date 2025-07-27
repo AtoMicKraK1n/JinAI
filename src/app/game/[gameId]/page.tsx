@@ -33,6 +33,7 @@ export default function QuizGamePage() {
   const [players, setPlayers] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
   const [isRunning, setIsRunning] = useState(false);
+  const [answered, setAnswered] = useState(false);
 
   const [gameState, setGameState] = useState({
     currentQuestion: 0,
@@ -47,11 +48,10 @@ export default function QuizGamePage() {
     correctAnswer: null,
   });
 
-  const [answered, setAnswered] = useState(false);
+  const userId = getCurrentUserId();
+  const isHost = players[0]?.userId === userId;
 
-  const isHost = players[0]?.userId === getCurrentUserId();
-
-  const { timeLeft } = useTimer({
+  const { timeLeft, startTimer } = useTimer({
     duration: 30,
     isRunning,
     isHost,
@@ -74,6 +74,10 @@ export default function QuizGamePage() {
 
     socket.emit("join-game", { gameId, token });
 
+    socket.on("existing-players", (playersList) => {
+      setPlayers(playersList);
+    });
+
     socket.on("player-joined", (data) => {
       setPlayers((prev) => {
         const exists = prev.some((p) => p.userId === data.userId);
@@ -92,6 +96,19 @@ export default function QuizGamePage() {
     socket.on("start-game", () => {
       console.log("🔥 Game started");
       setIsRunning(true);
+    });
+
+    socket.on("next-question", (index: number) => {
+      setGameState((prev) => ({
+        ...prev,
+        currentQuestion: index,
+        selectedAnswer: null,
+        isCorrect: false,
+        correctAnswer: null,
+        totalQuestions: prev.totalQuestions,
+      }));
+      setAnswered(false);
+      startTimer();
     });
 
     fetch(`/api/games/seed-questions`, {
@@ -130,7 +147,11 @@ export default function QuizGamePage() {
       });
 
     return () => {
-      socket.disconnect();
+      socket.off("player-joined");
+      socket.off("score-update");
+      socket.off("start-game");
+      socket.off("existing-players");
+      socket.off("next-question");
     };
   }, [gameId]);
 
@@ -138,15 +159,10 @@ export default function QuizGamePage() {
     setGameState((prev) => ({ ...prev, timeLeft }));
   }, [timeLeft]);
 
-  useEffect(() => {
-    setAnswered(false);
-  }, [gameState.currentQuestion]);
-
   const selectAnswer = async (index: number) => {
     if (answered) return;
 
     const token = sessionStorage.getItem("jwt");
-    const userId = getCurrentUserId();
     if (!token || !userId) {
       console.warn("JWT missing, cannot submit answer");
       return;
@@ -157,8 +173,6 @@ export default function QuizGamePage() {
       console.warn("No current question");
       return;
     }
-
-    const selectedOptionText = currentQ.options[index];
 
     try {
       const res = await fetch("/api/quiz/answer", {
@@ -189,6 +203,7 @@ export default function QuizGamePage() {
       setGameState((prev) => ({
         ...prev,
         selectedAnswer: index,
+        totalQuestions: prev.totalQuestions,
         isCorrect,
         score: prev.score + points,
         streak: isCorrect ? prev.streak + 1 : 0,
@@ -214,14 +229,9 @@ export default function QuizGamePage() {
     if (next >= questions.length) {
       router.push(`/quiz/${gameId}/results`);
     } else {
-      setGameState((prev) => ({
-        ...prev,
-        currentQuestion: next,
-        selectedAnswer: null,
-        isCorrect: false,
-        correctAnswer: null,
-        timeLeft: 30,
-      }));
+      if (isHost) {
+        socket.emit("next-question", next);
+      }
     }
   };
 

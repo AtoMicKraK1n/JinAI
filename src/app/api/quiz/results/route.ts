@@ -68,25 +68,14 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const results = await Promise.all(
-      game.participants.map(async (participant) => {
-        const answers = await prisma.playerAnswer.findMany({
-          where: { gameId, userId: participant.userId },
-        });
-
-        const totalScore = answers.reduce((sum, a) => sum + a.points, 0);
-        const correctAnswers = answers.filter((a) => a.isCorrect).length;
-
-        return {
-          userId: participant.userId,
-          username: participant.user.username,
-          walletAddress: participant.user.walletAddress,
-          totalScore,
-          correctAnswers,
-          totalAnswers: answers.length,
-        };
-      })
-    );
+    const results = game.participants.map((participant) => ({
+      userId: participant.userId,
+      username: participant.user.username,
+      walletAddress: participant.user.walletAddress,
+      totalScore: participant.finalScore,
+      correctAnswers: null, // optional: remove if unused
+      totalAnswers: null, // optional: remove if unused
+    }));
 
     results.sort((a, b) => b.totalScore - a.totalScore);
 
@@ -166,8 +155,8 @@ export async function GET(request: NextRequest) {
       program.programId
     );
 
-    const playerPDAs = await Promise.all(
-      results.map((r) =>
+    const playerPDAs = results.map(
+      (r) =>
         PublicKey.findProgramAddressSync(
           [
             Buffer.from("player"),
@@ -175,8 +164,7 @@ export async function GET(request: NextRequest) {
             new PublicKey(r.walletAddress).toBuffer(),
           ],
           program.programId
-        )
-      )
+        )[0]
     );
 
     // ✅ set_results
@@ -186,10 +174,10 @@ export async function GET(request: NextRequest) {
         pool: poolPda,
         globalState: globalStatePda,
         authority: inGameKeypair.publicKey,
-        player1: playerPDAs[0][0],
-        player2: playerPDAs[1][0],
-        player3: playerPDAs[2][0],
-        player4: playerPDAs[3][0],
+        player1: playerPDAs[0],
+        player2: playerPDAs[1],
+        player3: playerPDAs[2],
+        player4: playerPDAs[3],
       })
       .signers([inGameKeypair])
       .rpc({ commitment: "confirmed" });
@@ -204,10 +192,10 @@ export async function GET(request: NextRequest) {
         authority: inGameKeypair.publicKey,
         treasury: new PublicKey(process.env.TREASURY!),
         systemProgram: SystemProgram.programId,
-        player1: playerPDAs[0][0],
-        player2: playerPDAs[1][0],
-        player3: playerPDAs[2][0],
-        player4: playerPDAs[3][0],
+        player1: playerPDAs[0],
+        player2: playerPDAs[1],
+        player3: playerPDAs[2],
+        player4: playerPDAs[3],
       })
       .signers([inGameKeypair])
       .rpc({ commitment: "confirmed" });

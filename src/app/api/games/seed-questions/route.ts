@@ -24,7 +24,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify user is the game creator or participant
     const participant = await prisma.gameParticipant.findFirst({
       where: {
         gameId,
@@ -39,7 +38,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if questions are already seeded for this game
     const existingQuestions = await prisma.gameQuestion.findMany({
       where: { gameId },
     });
@@ -52,13 +50,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Get random questions from different difficulties
     const easyQuestions = await prisma.question.findMany({
       where: {
         difficulty: "EASY",
         isActive: true,
       },
-      take: Math.ceil(questionCount * 0.4), // 40% easy
+      take: Math.ceil(questionCount * 0.4),
       orderBy: { createdAt: "desc" },
     });
 
@@ -67,7 +64,7 @@ export async function POST(request: NextRequest) {
         difficulty: "MEDIUM",
         isActive: true,
       },
-      take: Math.ceil(questionCount * 0.4), // 40% medium
+      take: Math.ceil(questionCount * 0.4),
       orderBy: { createdAt: "desc" },
     });
 
@@ -76,18 +73,22 @@ export async function POST(request: NextRequest) {
         difficulty: "HARD",
         isActive: true,
       },
-      take: Math.ceil(questionCount * 0.2), // 20% hard
+      take: Math.ceil(questionCount * 0.2),
       orderBy: { createdAt: "desc" },
     });
 
-    // Combine and shuffle questions
-    const selectedQuestions = [
+    // Combine, deduplicate by question ID, then slice
+    const combinedQuestions = [
       ...easyQuestions,
       ...mediumQuestions,
       ...hardQuestions,
-    ].slice(0, questionCount);
+    ];
 
-    if (selectedQuestions.length === 0) {
+    const uniqueQuestions = Array.from(
+      new Map(combinedQuestions.map((q) => [q.id, q])).values()
+    ).slice(0, questionCount);
+
+    if (uniqueQuestions.length === 0) {
       return NextResponse.json(
         { error: "No questions available in database" },
         { status: 400 }
@@ -95,37 +96,46 @@ export async function POST(request: NextRequest) {
     }
 
     // Shuffle the questions array
-    for (let i = selectedQuestions.length - 1; i > 0; i--) {
+    for (let i = uniqueQuestions.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [selectedQuestions[i], selectedQuestions[j]] = [
-        selectedQuestions[j],
-        selectedQuestions[i],
+      [uniqueQuestions[i], uniqueQuestions[j]] = [
+        uniqueQuestions[j],
+        uniqueQuestions[i],
       ];
     }
 
-    // Create GameQuestion records
     const gameQuestions = await Promise.all(
-      selectedQuestions.map(async (question, index) => {
-        return await prisma.gameQuestion.create({
-          data: {
-            gameId,
-            questionId: question.id,
-            orderIndex: index + 1,
-            timeLimit: getTimeLimitByDifficulty(question.difficulty),
-          },
-        });
+      uniqueQuestions.map(async (question, index) => {
+        try {
+          return await prisma.gameQuestion.create({
+            data: {
+              gameId,
+              questionId: question.id,
+              orderIndex: index + 1,
+              timeLimit: getTimeLimitByDifficulty(question.difficulty),
+            },
+          });
+        } catch (e: any) {
+          if (e.code === "P2002") {
+            console.warn(
+              `Duplicate entry skipped: gameId=${gameId}, questionId=${question.id}`
+            );
+            return null;
+          }
+          throw e;
+        }
       })
     );
 
     return NextResponse.json({
       success: true,
       message: "Questions seeded successfully",
-      questionsSeeded: gameQuestions.length,
+      questionsSeeded: gameQuestions.filter(Boolean).length,
       breakdown: {
         easy: easyQuestions.length,
         medium: mediumQuestions.length,
         hard: hardQuestions.length,
-        total: selectedQuestions.length,
+        total: uniqueQuestions.length,
       },
     });
   } catch (error) {
@@ -137,21 +147,19 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to set time limits based on difficulty
 function getTimeLimitByDifficulty(difficulty: string): number {
   switch (difficulty) {
     case "EASY":
-      return 20; // 20 seconds
+      return 30;
     case "MEDIUM":
-      return 30; // 30 seconds
+      return 30;
     case "HARD":
-      return 45; // 45 seconds
+      return 30;
     default:
       return 30;
   }
 }
 
-// Optional: GET method to check seeded questions for a game
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { IconUsers, IconFlame } from "@tabler/icons-react";
 
 interface Player {
-  wallet: string;
+  userId: string;
   score: number;
   avatar?: string;
   isOnline?: boolean;
@@ -65,13 +65,13 @@ const LiveLeaderboard: React.FC<LiveLeaderboardProps> = ({
             const isCurrentPlayer = player.username === "You";
             const displayName = isCurrentPlayer
               ? "You"
-              : player.wallet
-              ? `Player_${player.wallet.slice(0, 6)}`
+              : player.username
+              ? `Player_${player.username.slice(0, 6)}`
               : "Unknown Player";
 
             return (
               <motion.div
-                key={player.wallet}
+                key={player.username}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}

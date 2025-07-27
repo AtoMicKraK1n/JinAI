@@ -29,25 +29,25 @@ export async function calculateAndDistributePrizes(gameId: string) {
 
     const results = participants.map((p) => {
       const answers = allAnswers.filter((a) => a.userId === p.userId);
-      const totalScore = answers.reduce((sum, a) => sum + a.points, 0);
+      const finalScore = answers.reduce((sum, a) => sum + a.points, 0);
       const correctAnswers = answers.filter((a) => a.isCorrect).length;
 
       return {
         userId: p.userId,
         username: p.user.username,
         walletAddress: p.user.walletAddress,
-        totalScore,
+        finalScore,
         correctAnswers,
         totalAnswers: answers.length,
       };
     });
 
-    results.sort((a, b) => b.totalScore - a.totalScore);
+    results.sort((a, b) => b.finalScore - a.finalScore);
 
     const prizeDistribution = {
       1: 0.4,
       2: 0.3,
-      3: 0.1,
+      3: 0.2,
       4: 0.1,
     };
 
@@ -65,11 +65,12 @@ export async function calculateAndDistributePrizes(gameId: string) {
         data: {
           finalRank: rank,
           prizeWon: prizeAmount,
+          finalScore: results[i].finalScore,
         },
       });
     }
 
-    console.log(`🏁 Prizes distributed for game ${gameId}`);
+    console.log(`🏁 Prizes distributed and stats saved for game ${gameId}`);
   } catch (error) {
     console.error("❌ Error in prize distribution:", error);
   }

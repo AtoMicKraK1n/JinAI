@@ -47,3 +47,4 @@ next-env.d.ts
 /generated/prisma
 
 /prisma/seed.ts
+/prisma/*.ts
