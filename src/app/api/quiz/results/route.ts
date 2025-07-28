@@ -36,9 +36,7 @@ export async function GET(request: NextRequest) {
       include: {
         participants: {
           include: {
-            user: {
-              select: { id: true, username: true, walletAddress: true },
-            },
+            user: { select: { id: true, username: true, walletAddress: true } },
           },
         },
       },
@@ -73,11 +71,11 @@ export async function GET(request: NextRequest) {
       username: participant.user.username,
       walletAddress: participant.user.walletAddress,
       totalScore: participant.finalScore,
-      correctAnswers: null, // optional: remove if unused
-      totalAnswers: null, // optional: remove if unused
     }));
 
-    results.sort((a, b) => b.totalScore - a.totalScore);
+    results.sort((a, b) => b.totalScore - a.totalScore); // ✅ correct sorting first
+
+    const poolIndex = game.poolIndex;
 
     const prizeDistribution = { 1: 0.4, 2: 0.3, 3: 0.1, 4: 0.1 };
     const playerRanks: number[] = [];
@@ -90,7 +88,11 @@ export async function GET(request: NextRequest) {
 
       await prisma.gameParticipant.updateMany({
         where: { gameId, userId: results[i].userId },
-        data: { finalRank: rank, prizeWon: prizeAmount },
+        data: {
+          finalRank: rank,
+          prizeWon: prizeAmount,
+          finalScore: results[i].totalScore,
+        },
       });
 
       playerRanks.push(rank);
@@ -101,8 +103,7 @@ export async function GET(request: NextRequest) {
       data: { status: "COMPLETED" },
     });
 
-    // 🧠 On-chain logic
-    const poolIndex = game.poolIndex;
+    // Solana on-chain setup
     const RPC_URL = process.env.HELIUS_RPC_KEY
       ? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_RPC_KEY}`
       : "https://api.devnet.solana.com";
@@ -155,20 +156,54 @@ export async function GET(request: NextRequest) {
       program.programId
     );
 
+    const poolIdBuffer = new anchor.BN(poolIndex).toArrayLike(Buffer, "le", 8);
+
+    // Fetch on-chain pool to get correct playerAccounts order
+    const rawPoolAccount = await program.account.pool.fetch(poolPda);
+
+    // Map pubkeys to base58 for easier comparison
+    const orderedWallets: string[] = rawPoolAccount.playerAccounts.map(
+      (pubkey: PublicKey) => pubkey.toBase58()
+    );
+
+    // Reorder the `results[]` to match on-chain order
+    results.sort(
+      (a, b) =>
+        orderedWallets.indexOf(a.walletAddress) -
+        orderedWallets.indexOf(b.walletAddress)
+    );
+
+    // Now derive player PDAs using this correct order
     const playerPDAs = results.map(
       (r) =>
         PublicKey.findProgramAddressSync(
           [
             Buffer.from("player"),
-            new anchor.BN(poolIndex).toArrayLike(Buffer, "le", 8),
+            poolIdBuffer,
             new PublicKey(r.walletAddress).toBuffer(),
           ],
           program.programId
         )[0]
     );
 
-    // ✅ set_results
-    await program.methods
+    console.log("📊 Final Ranked Results:");
+    results.forEach((r, idx) => {
+      console.log(
+        `🏅 Rank ${idx + 1}: ${r.username} | Wallet: ${
+          r.walletAddress
+        } | PDA: ${playerPDAs[idx].toBase58()}`
+      );
+    });
+
+    console.log("\n📍PDAs Used:");
+    console.log("📦 Pool PDA:", poolPda.toBase58());
+    console.log("💰 Vault PDA:", vaultPda.toBase58());
+    console.log("🌐 Global State PDA:", globalStatePda.toBase58());
+    console.log("🔑 In-Game Authority:", inGameKeypair.publicKey.toBase58());
+
+    console.log("🚀 Calling `set_results` on-chain...");
+
+    const txSig = await program.methods
       .setResults(playerRanks as [number, number, number, number])
       .accountsPartial({
         pool: poolPda,
@@ -182,23 +217,10 @@ export async function GET(request: NextRequest) {
       .signers([inGameKeypair])
       .rpc({ commitment: "confirmed" });
 
-    // ✅ t_rewards
-    await program.methods
-      .tRewards()
-      .accountsPartial({
-        pool: poolPda,
-        poolVault: vaultPda,
-        globalState: globalStatePda,
-        authority: inGameKeypair.publicKey,
-        treasury: new PublicKey(process.env.TREASURY!),
-        systemProgram: SystemProgram.programId,
-        player1: playerPDAs[0],
-        player2: playerPDAs[1],
-        player3: playerPDAs[2],
-        player4: playerPDAs[3],
-      })
-      .signers([inGameKeypair])
-      .rpc({ commitment: "confirmed" });
+    console.log("✅ set_results transaction sent!");
+    console.log(
+      `🔍 Explorer Link: https://explorer.solana.com/tx/${txSig}?cluster=devnet`
+    );
 
     const finalResults = await prisma.gameParticipant.findMany({
       where: { gameId },

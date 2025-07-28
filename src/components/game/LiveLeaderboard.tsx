@@ -66,28 +66,25 @@ const LiveLeaderboard: React.FC<LiveLeaderboardProps> = ({
             const displayName = isCurrentPlayer
               ? "You"
               : player.username
-              ? `Player_${player.username.slice(0, 6)}`
-              : "Unknown Player";
+              ? player.username
+              : "Unknown";
 
             return (
               <motion.div
-                key={player.username}
+                key={player.userId}
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
-                className={`flex items-center gap-3 p-3 rounded-lg border transition-all duration-300 ${
+                className={`flex items-center gap-4 p-3 rounded-lg border transition-all duration-300 ${
                   isCurrentPlayer
                     ? "bg-golden-500/20 border-golden-400/50"
                     : "bg-gray-800/50 border-gray-700/30"
                 }`}
               >
-                <div className="flex items-center justify-center w-6 h-6 rounded-full bg-gray-700 text-xs font-bold">
-                  {index + 1}
-                </div>
                 <div className="text-lg">{player.avatar ?? "👤"}</div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-white font-semibold text-sm">
+                    <span className="text-white font-semibold text-sm break-all">
                       {displayName}
                     </span>
                     {player.isOnline && (

@@ -108,6 +108,19 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // 🔢 Update gameParticipant.finalScore
+    const totalScore = await prisma.playerAnswer.aggregate({
+      where: { gameId, userId },
+      _sum: { points: true },
+    });
+
+    await prisma.gameParticipant.updateMany({
+      where: { gameId, userId },
+      data: {
+        finalScore: totalScore._sum.points || 0,
+      },
+    });
+
     const game = await prisma.gameSession.findUnique({
       where: { id: gameId },
     });

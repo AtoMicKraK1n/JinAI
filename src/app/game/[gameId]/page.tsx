@@ -257,8 +257,13 @@ export default function QuizGamePage() {
             getDifficultyColor={getDifficultyColor}
           />
         ) : (
-          <div className="text-white text-center pt-24 text-xl">
-            Loading questions or something went wrong...
+          <div className="flex items-center justify-center h-screen">
+            <div className="neo-card bg-yellow-400 px-8 py-6 text-white text-lg text-center rounded-xl shadow-lg">
+              Loading questions...
+              <div className="mt-4 flex justify-center">
+                <div className="loader"></div>
+              </div>
+            </div>
           </div>
         )}
       </motion.div>
