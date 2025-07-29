@@ -8,7 +8,6 @@ import idl from "@/lib/IDL.json";
 import { JinaiHere } from "@/lib/program";
 
 const prisma = new PrismaClient();
-const PROGRAM_ID = new PublicKey(idl.address);
 
 async function verifyToken(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -42,28 +41,35 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    if (!game)
+    if (!game) {
       return NextResponse.json({ error: "Game not found" }, { status: 404 });
-
-    const isHost = game.participants[0]?.userId === userId;
-    if (!isHost) {
-      return NextResponse.json(
-        { error: "Only host can finalize results" },
-        { status: 403 }
-      );
     }
 
+    const isHost = game.participants[0]?.userId === userId;
+
     if (game.status === "COMPLETED") {
-      const results = await prisma.gameParticipant.findMany({
+      const finalResults = await prisma.gameParticipant.findMany({
         where: { gameId },
         include: { user: { select: { username: true } } },
         orderBy: { finalRank: "asc" },
       });
+
       return NextResponse.json({
         success: true,
         message: "Already completed",
-        results,
+        results: finalResults.map((r) => ({
+          finalRank: r.finalRank,
+          finalScore: r.finalScore,
+          username: r.user?.username || "Unknown",
+        })),
       });
+    }
+
+    if (!isHost) {
+      return NextResponse.json(
+        { error: "Results not yet finalized by host." },
+        { status: 403 }
+      );
     }
 
     const results = game.participants.map((participant) => ({
@@ -73,10 +79,9 @@ export async function GET(request: NextRequest) {
       totalScore: participant.finalScore,
     }));
 
-    results.sort((a, b) => b.totalScore - a.totalScore); // ✅ correct sorting first
+    results.sort((a, b) => b.totalScore - a.totalScore);
 
     const poolIndex = game.poolIndex;
-
     const prizeDistribution = { 1: 0.4, 2: 0.3, 3: 0.1, 4: 0.1 };
     const playerRanks: number[] = [];
 
@@ -103,7 +108,7 @@ export async function GET(request: NextRequest) {
       data: { status: "COMPLETED" },
     });
 
-    // Solana on-chain setup
+    // On-chain interaction
     const RPC_URL = process.env.HELIUS_RPC_KEY
       ? `https://devnet.helius-rpc.com/?api-key=${process.env.HELIUS_RPC_KEY}`
       : "https://api.devnet.solana.com";
@@ -135,46 +140,45 @@ export async function GET(request: NextRequest) {
       provider
     ) as unknown as anchor.Program<JinaiHere>;
 
+    const poolIdBuffer = new anchor.BN(poolIndex).toArrayLike(Buffer, "le", 8);
     const [poolPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool"),
-        new anchor.BN(poolIndex).toArrayLike(Buffer, "le", 8),
-      ],
+      [Buffer.from("pool"), poolIdBuffer],
       program.programId
     );
-
     const [vaultPda] = PublicKey.findProgramAddressSync(
-      [
-        Buffer.from("pool-vault"),
-        new anchor.BN(poolIndex).toArrayLike(Buffer, "le", 8),
-      ],
+      [Buffer.from("pool-vault"), poolIdBuffer],
       program.programId
     );
-
     const [globalStatePda] = PublicKey.findProgramAddressSync(
       [Buffer.from("global-state")],
       program.programId
     );
 
-    const poolIdBuffer = new anchor.BN(poolIndex).toArrayLike(Buffer, "le", 8);
-
-    // Fetch on-chain pool to get correct playerAccounts order
     const rawPoolAccount = await program.account.pool.fetch(poolPda);
 
-    // Map pubkeys to base58 for easier comparison
-    const orderedWallets: string[] = rawPoolAccount.playerAccounts.map(
-      (pubkey: PublicKey) => pubkey.toBase58()
+    const playerPDAsOnChain = rawPoolAccount.playerAccounts.map(
+      (p: PublicKey) => p.toBase58()
     );
 
-    // Reorder the `results[]` to match on-chain order
-    results.sort(
-      (a, b) =>
-        orderedWallets.indexOf(a.walletAddress) -
-        orderedWallets.indexOf(b.walletAddress)
+    const playerPDAsLocal = results.map((r) =>
+      PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("player"),
+          poolIdBuffer,
+          new PublicKey(r.walletAddress).toBuffer(),
+        ],
+        program.programId
+      )[0].toBase58()
     );
 
-    // Now derive player PDAs using this correct order
-    const playerPDAs = results.map(
+    const reorderedResults = playerPDAsOnChain.map((onChainPda) => {
+      const idx = playerPDAsLocal.findIndex(
+        (localPda) => localPda === onChainPda
+      );
+      return results[idx];
+    });
+
+    const finalPlayerPDAs = reorderedResults.map(
       (r) =>
         PublicKey.findProgramAddressSync(
           [
@@ -186,41 +190,38 @@ export async function GET(request: NextRequest) {
         )[0]
     );
 
-    console.log("📊 Final Ranked Results:");
-    results.forEach((r, idx) => {
-      console.log(
-        `🏅 Rank ${idx + 1}: ${r.username} | Wallet: ${
-          r.walletAddress
-        } | PDA: ${playerPDAs[idx].toBase58()}`
-      );
-    });
-
-    console.log("\n📍PDAs Used:");
-    console.log("📦 Pool PDA:", poolPda.toBase58());
-    console.log("💰 Vault PDA:", vaultPda.toBase58());
-    console.log("🌐 Global State PDA:", globalStatePda.toBase58());
-    console.log("🔑 In-Game Authority:", inGameKeypair.publicKey.toBase58());
-
-    console.log("🚀 Calling `set_results` on-chain...");
-
+    // On-chain: set_results
     const txSig = await program.methods
       .setResults(playerRanks as [number, number, number, number])
       .accountsPartial({
         pool: poolPda,
         globalState: globalStatePda,
         authority: inGameKeypair.publicKey,
-        player1: playerPDAs[0],
-        player2: playerPDAs[1],
-        player3: playerPDAs[2],
-        player4: playerPDAs[3],
+        player1: finalPlayerPDAs[0],
+        player2: finalPlayerPDAs[1],
+        player3: finalPlayerPDAs[2],
+        player4: finalPlayerPDAs[3],
       })
       .signers([inGameKeypair])
       .rpc({ commitment: "confirmed" });
 
-    console.log("✅ set_results transaction sent!");
-    console.log(
-      `🔍 Explorer Link: https://explorer.solana.com/tx/${txSig}?cluster=devnet`
-    );
+    // On-chain: t_rewards
+    const rewardTxSig = await program.methods
+      .tRewards()
+      .accountsPartial({
+        pool: poolPda,
+        globalState: globalStatePda,
+        authority: inGameKeypair.publicKey,
+        poolVault: vaultPda,
+        treasury: new PublicKey("GkiKqSVfnU2y4TeUW7up2JS9Z8g1yjGYJ8x2QNf4K6Y"),
+        player1: finalPlayerPDAs[0],
+        player2: finalPlayerPDAs[1],
+        player3: finalPlayerPDAs[2],
+        player4: finalPlayerPDAs[3],
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([inGameKeypair])
+      .rpc({ commitment: "confirmed" });
 
     const finalResults = await prisma.gameParticipant.findMany({
       where: { gameId },
@@ -230,8 +231,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      message: "Game completed. Results finalized and rewards distributed.",
-      results: finalResults,
+      message:
+        "Game completed. Results finalized, rewards distributed, and prizes claimed.",
+      results: finalResults.map((r) => ({
+        finalRank: r.finalRank,
+        finalScore: r.finalScore,
+        username: r.user.username,
+      })),
     });
   } catch (error) {
     console.error("Results error:", error);

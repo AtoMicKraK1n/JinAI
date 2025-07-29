@@ -1,13 +1,11 @@
+"use client";
+
 import React from "react";
 import { motion } from "framer-motion";
 import { useRouter, usePathname } from "next/navigation";
-import {
-  IconBolt,
-  IconTrophy,
-  IconUsers,
-  IconSettings,
-} from "@tabler/icons-react";
+import { IconTrophy, IconUsers, IconGift } from "@tabler/icons-react";
 import { ConnectWallet } from "./ConnectWallet";
+import Image from "next/image";
 
 const Navbar: React.FC = () => {
   const router = useRouter();
@@ -32,8 +30,14 @@ const Navbar: React.FC = () => {
               transition={{ duration: 0.2 }}
               onClick={() => router.push("/")}
             >
-              <div className="p-2 bg-gradient-to-br from-jingold to-jingold-dark rounded-lg glow-effect">
-                <IconBolt size={24} className="text-jinblack" />
+              <div className="p-1 rounded-lg glow-effect">
+                <Image
+                  src="/favicon.ico"
+                  alt="JinAI Logo"
+                  width={28}
+                  height={28}
+                  className="rounded-md"
+                />
               </div>
               <h1 className="text-3xl font-bold futuristic-text text-jingold">
                 Jin<span className="text-jingold-light">AI</span>
@@ -71,16 +75,17 @@ const Navbar: React.FC = () => {
               </motion.button>
 
               <motion.button
-                className={`p-2 rounded-lg border border-jingold/20 text-jingold transition-all duration-300 ${
-                  isActive("/settings")
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-jingold/20 text-jingold transition-all duration-300 ${
+                  isActive("/claim")
                     ? "bg-jingold/30 border-jingold/50"
                     : "bg-jingold/10 hover:bg-jingold/20"
                 }`}
-                whileHover={{ scale: 1.05, rotate: 90 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => router.push("/settings")}
+                onClick={() => router.push("/claim")}
               >
-                <IconSettings size={18} />
+                <IconGift size={18} />
+                <span className="text-sm font-semibold">Claim Prize</span>
               </motion.button>
             </div>
 

@@ -174,6 +174,16 @@ export default function QuizGamePage() {
       return;
     }
 
+    setAnswered(true); // 👈 UI immediately locks the selection
+    setGameState((prev) => ({
+      ...prev,
+      selectedAnswer: index,
+    }));
+
+    // Start a fallback timeout: if response takes too long, still show something
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000); // 2s max wait
+
     try {
       const res = await fetch("/api/quiz/answer", {
         method: "POST",
@@ -181,6 +191,7 @@ export default function QuizGamePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        signal: controller.signal,
         body: JSON.stringify({
           gameId,
           questionId: currentQ.id,
@@ -188,6 +199,8 @@ export default function QuizGamePage() {
           responseTime: (30 - gameState.timeLeft) * 1000,
         }),
       });
+
+      clearTimeout(timeout);
 
       const data = await res.json();
 
@@ -198,12 +211,8 @@ export default function QuizGamePage() {
 
       const { isCorrect, points, correctAnswer } = data.result;
 
-      setAnswered(true);
-
       setGameState((prev) => ({
         ...prev,
-        selectedAnswer: index,
-        totalQuestions: prev.totalQuestions,
         isCorrect,
         score: prev.score + points,
         streak: isCorrect ? prev.streak + 1 : 0,
@@ -220,14 +229,19 @@ export default function QuizGamePage() {
         score: gameState.score + points,
       });
     } catch (err) {
-      console.error("Error submitting answer:", err);
+      console.warn("Answer submission failed or slow:", err);
+      setGameState((prev) => ({
+        ...prev,
+        isCorrect: false,
+        correctAnswer: null,
+      }));
     }
   };
 
   const nextQuestion = () => {
     const next = gameState.currentQuestion + 1;
     if (next >= questions.length) {
-      router.push(`/quiz/${gameId}/results`);
+      router.push(`/results/${gameId}`);
     } else {
       if (isHost) {
         socket.emit("next-question", next);
