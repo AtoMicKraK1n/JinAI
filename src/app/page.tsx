@@ -3,7 +3,7 @@ import { useRouter } from "next/navigation";
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { GameCard } from "@/components/GameCard";
-import ComingSoon from "@/app/ComingSoon/page";
+import ComingSoon from "@/components/game/ComingSoon";
 
 import ParticleBackground from "@/components/ParticleBackground";
 import Navbar from "@/components/Navbar";
