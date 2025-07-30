@@ -10,7 +10,7 @@ import Navbar from "@/components/Navbar";
 import { useTimer } from "@/hooks/useTimer";
 import { getDifficultyColor } from "@/lib/utils";
 
-const socket: Socket = io(process.env.NEXT_PUBLIC_SOCKET_URL as string);
+const socket: Socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
 
 function getCurrentUserId(): string | null {
   try {
