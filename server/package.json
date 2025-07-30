@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "postinstall": "prisma generate --schema=../prisma/schema.prisma"
+    "prepare": "cp ../prisma/schema.prisma ./schema.prisma",
+    "postinstall": "prisma generate --schema=schema.prisma"
   },
   "keywords": [],
   "author": "",
