@@ -1,0 +1,129 @@
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+        
+
+model User {
+  id               String            @id @default(cuid())
+  walletAddress    String            @unique
+  username         String?
+  avatar           String?
+  totalGamesPlayed Int               @default(0)
+  totalWins        Int               @default(0)
+  totalEarnings    Float             @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  gameParticipants GameParticipant[]
+  playerAnswers    PlayerAnswer[]
+
+  @@map("users")
+}
+
+model Question {
+  id            String         @id @default(cuid())
+  question      String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctAnswer String
+  difficulty    Difficulty     @default(MEDIUM)
+  category      String
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  gameQuestions GameQuestion[]
+  playerAnswers PlayerAnswer[]
+
+  @@map("questions")
+}
+
+model GameSession {
+  id             String            @id @default(cuid())
+  poolId         String            @unique
+  poolIndex      Int               @default(0)
+  status         GameStatus        @default(WAITING)
+  maxPlayers     Int               @default(4)
+  currentPlayers Int               @default(0)
+  prizePool      Float             @default(0)
+  entryFee       Float
+  startTime      DateTime?
+  endTime        DateTime?
+  winnerId       String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  participants   GameParticipant[]
+  gameQuestions  GameQuestion[]
+  playerAnswers  PlayerAnswer[]
+
+  @@map("game_sessions")
+}
+
+model GameParticipant {
+  id         String      @id @default(cuid())
+  gameId     String
+  userId     String
+  joinedAt   DateTime    @default(now())
+  finalScore Int         @default(0)
+  finalRank  Int?
+  prizeWon   Float       @default(0)
+  hasClaimed Boolean     @default(false)
+  game       GameSession @relation(fields: [gameId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+
+  @@unique([gameId, userId])
+  @@map("game_participants")
+}
+
+model GameQuestion {
+  id         String      @id @default(cuid())
+  gameId     String
+  questionId String
+  orderIndex Int
+  timeLimit  Int         @default(30)
+  game       GameSession @relation(fields: [gameId], references: [id])
+  question   Question    @relation(fields: [questionId], references: [id])
+
+  @@unique([gameId, questionId])
+  @@unique([gameId, orderIndex])
+  @@map("game_questions")
+}
+
+model PlayerAnswer {
+  id             String      @id @default(cuid())
+  gameId         String
+  userId         String
+  questionId     String
+  selectedAnswer String
+  isCorrect      Boolean
+  responseTime   Int
+  points         Int         @default(0)
+  answeredAt     DateTime    @default(now())
+  game           GameSession @relation(fields: [gameId], references: [id])
+  question       Question    @relation(fields: [questionId], references: [id])
+  user           User        @relation(fields: [userId], references: [id])
+
+  @@unique([gameId, userId, questionId])
+  @@map("player_answers")
+}
+
+enum GameStatus {
+  WAITING
+  STARTING
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
