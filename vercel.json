@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/socket.io/:path*",
+      "destination": "https://jinai-production.up.railway.app/socket.io/:path*"
+    }
+  ]
+}
