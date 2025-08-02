@@ -51,11 +51,6 @@ function setupSocketServer(io) {
         console.log("✅ join-game triggered with:", gameId, userId);
         console.log("📤 Emitting player-joined:", { userId, username });
 
-        io.to(gameId).emit("player-joined", {
-          userId,
-          username,
-        });
-
         const allParticipants = await prisma.gameParticipant.findMany({
           where: { gameId },
           include: { user: true },
@@ -66,7 +61,14 @@ function setupSocketServer(io) {
           username: p.user.username || `Player_${p.userId.slice(-4)}`,
         }));
 
+        // 🔁 1. Send existing players to the current socket first
         socket.emit("existing-players", existingPlayers);
+
+        // 📢 2. Then tell others about this new player
+        socket.to(gameId).emit("player-joined", {
+          userId,
+          username,
+        });
 
         if (existingPlayers.length === 4) {
           console.log("🚀 4 players joined, sending start-game event");
