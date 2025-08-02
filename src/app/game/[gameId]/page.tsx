@@ -3,14 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { io, Socket } from "socket.io-client";
+import socket from "@/lib/socket";
 import GameScreen from "@/components/GameScreen";
 import ParticleBackground from "@/components/ParticleBackground";
 import Navbar from "@/components/Navbar";
 import { useTimer } from "@/hooks/useTimer";
 import { getDifficultyColor } from "@/lib/utils";
 
-const socket: Socket = io(process.env.NEXT_PUBLIC_SOCKET_URL);
+socket.connect();
 
 function getCurrentUserId(): string | null {
   try {
