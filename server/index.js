@@ -123,14 +123,6 @@ function setupSocketServer(io) {
       });
     });
 
-    socket.on("player-joined", ({ gameId, playerId, username }) => {
-      const safeName = username || `Player_${playerId.slice(-4)}`;
-      io.to(gameId).emit("player-joined", {
-        userId: playerId,
-        username: safeName,
-      });
-    });
-
     socket.on("timer-update", ({ roomId, timeLeft }) => {
       io.to(roomId).emit("timer-update", { roomId, timeLeft });
     });
