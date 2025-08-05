@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import ParticleBackground from "@/components/ParticleBackground";
@@ -20,8 +20,12 @@ export default function LobbyPage() {
   const { gameId } = useParams();
   const router = useRouter();
   const [players, setPlayers] = useState<any[]>([]);
+  // 'joined' is now only set after server confirmation via the 'existing-players' event
   const [joined, setJoined] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(true);
+
+  // Use a ref to ensure the join action is only attempted once
+  const joinAttempted = useRef(false);
 
   const { publicKey, signTransaction } = useWallet();
   const { connection } = useConnection();
@@ -30,6 +34,9 @@ export default function LobbyPage() {
   const token =
     typeof window !== "undefined" ? sessionStorage.getItem("jwt") : null;
 
+  // Refactored joinGame function:
+  // - It no longer sets component state directly.
+  // - Its only job is to perform the transaction and emit the 'join-game' event.
   const joinGame = async () => {
     console.log("🔥 joinGame called");
     try {
@@ -126,50 +133,30 @@ export default function LobbyPage() {
         );
       }
 
-      console.log("✅ joinPool success:", txid);
+      console.log("✅ Solana transaction successful:", txid);
+      console.log("📤 Emitting join-game event...");
 
-      const emitJoinGame = () => {
-        console.log("📤 Emitting join-game with:", { gameId, token });
-        socket.emit("join-game", { gameId, token }, (response: any) => {
+      // Emit the event and log the server's acknowledgement
+      socket.emit("join-game", { gameId, token }, (response: any) => {
+        if (response?.status === "ok") {
           console.log("✅ Server acknowledged join-game:", response);
-        });
-        setJoined(true);
-      };
-
-      if (socket.connected) {
-        emitJoinGame();
-      } else {
-        console.log("⏳ Socket not ready, waiting to emit join-game...");
-        socket.once("connect", emitJoinGame);
-      }
-
-      setJoined(true);
+        } else {
+          console.error("❌ Server had an issue with join-game", response);
+        }
+      });
     } catch (err: any) {
       const errMsg = err?.message || "";
-
       if (errMsg.includes("This transaction has already been processed")) {
         console.warn(
-          "this transaction has successfully landed onchain , proceeding..."
+          "Transaction already processed, assuming success and emitting join-game."
         );
-
-        const emitJoinGame = () => {
-          console.log("📤 Emitting join-game with (retry):", { gameId, token });
-          socket.emit("join-game", { gameId, token }, (response: any) => {
-            console.log("✅ Server acknowledged retry join-game:", response);
-          });
-          setJoined(true);
-        };
-
-        if (socket.connected) {
-          emitJoinGame();
-        } else {
-          console.log("⏳ Waiting for socket reconnect before retry emit...");
-          socket.once("connect", emitJoinGame);
-        }
+        socket.emit("join-game", { gameId, token }, (response: any) => {
+          console.log("✅ Server acknowledged join-game (retry):", response);
+        });
         return;
       }
 
-      console.error("Join error:", err);
+      console.error("❌ Fatal Join Error:", err);
       toast({
         variant: "destructive",
         title: "Error joining game",
@@ -179,51 +166,59 @@ export default function LobbyPage() {
   };
 
   const handleJoinConfirm = () => {
-    console.log("🟢 Confirmation clicked");
+    console.log("🟢 Confirmation button clicked");
     setShowConfirmation(false);
   };
 
+  // HOOK 1: Handles the ONE-TIME action of joining the game.
   useEffect(() => {
+    // These conditions must be met to attempt joining.
     if (
-      !gameId ||
+      showConfirmation ||
       !publicKey ||
-      !signTransaction ||
-      joined ||
       !token ||
-      !socket ||
-      showConfirmation
-    )
+      !gameId ||
+      joinAttempted.current
+    ) {
       return;
-
-    if (!socket.connected) {
-      socket.connect();
     }
 
-    const handleSocketConnect = () => {
-      console.log("✅ Socket connected:", socket.id);
+    // Mark that we are attempting to join to prevent this hook from running again.
+    console.log("🚀 Conditions met, attempting to join game...");
+    joinAttempted.current = true;
+
+    // Ensure the socket is connected before we call joinGame.
+    if (socket.connected) {
       joinGame();
-    };
+    } else {
+      console.log("⏳ Socket not connected, connecting first...");
+      socket.connect();
+      socket.once("connect", () => {
+        console.log("✅ Socket connected, now calling joinGame().");
+        joinGame();
+      });
+    }
+  }, [showConfirmation, publicKey, token, gameId]); // Dependencies that trigger the join action.
 
-    const handleSocketDisconnect = () => {
-      console.log("❌ Socket disconnected");
-    };
-
+  // HOOK 2: Handles all PERSISTENT socket event listeners.
+  useEffect(() => {
     const handleExistingPlayers = (playersList: any[]) => {
-      console.log("📋 Existing players received:", playersList);
+      console.log("📋 'existing-players' event received:", playersList);
       setPlayers(
         playersList.map((p) => ({
           userId: p.userId,
           username: p.username || `anon_${p.userId.slice(0, 4)}`,
         }))
       );
+      // This is the true confirmation that we have joined.
+      setJoined(true);
     };
 
     const handlePlayerJoined = (data: any) => {
-      console.log("📥 player-joined:", data);
+      console.log("📥 'player-joined' event received:", data);
       if (!data?.userId) return;
-
       setPlayers((prev) => {
-        if (prev.some((p) => p.userId === data.userId)) return prev;
+        if (prev.some((p) => p.userId === data.userId)) return prev; // Avoid duplicates
         return [
           ...prev,
           {
@@ -235,27 +230,34 @@ export default function LobbyPage() {
     };
 
     const handleStartGame = () => {
-      console.log("🚀 start-game received");
+      console.log("🚀 'start-game' event received, redirecting...");
       router.push(`/game/${gameId}`);
     };
 
-    socket.on("connect", handleSocketConnect);
-    socket.on("disconnect", handleSocketDisconnect);
+    const handleDisconnect = () => {
+      console.log("❌ Socket disconnected");
+      toast({
+        variant: "destructive",
+        title: "Disconnected",
+        description: "You have been disconnected from the server.",
+      });
+    };
+
+    // Attach all event listeners
     socket.on("existing-players", handleExistingPlayers);
     socket.on("player-joined", handlePlayerJoined);
     socket.on("start-game", handleStartGame);
+    socket.on("disconnect", handleDisconnect);
 
-    // If already connected (e.g. HMR reload), call manually
-    if (socket.connected) handleSocketConnect();
-
+    // This cleanup function will only run when the component unmounts
     return () => {
-      socket.off("connect", handleSocketConnect);
-      socket.off("disconnect", handleSocketDisconnect);
+      console.log("🧹 Cleaning up lobby listeners...");
       socket.off("existing-players", handleExistingPlayers);
       socket.off("player-joined", handlePlayerJoined);
       socket.off("start-game", handleStartGame);
+      socket.off("disconnect", handleDisconnect);
     };
-  }, [gameId, publicKey, signTransaction, joined, showConfirmation]);
+  }, [gameId, router, toast]); // Minimal dependencies for listeners.
 
   return (
     <>
