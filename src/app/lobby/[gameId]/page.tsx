@@ -31,6 +31,7 @@ export default function LobbyPage() {
     typeof window !== "undefined" ? sessionStorage.getItem("jwt") : null;
 
   const joinGame = async () => {
+    console.log("🔥 joinGame called");
     try {
       const res = await fetch("/api/games/join", {
         method: "POST",
@@ -89,6 +90,7 @@ export default function LobbyPage() {
         ],
         program.programId
       );
+
       const { blockhash, lastValidBlockHeight } =
         await connection.getLatestBlockhash("finalized");
 
@@ -125,7 +127,23 @@ export default function LobbyPage() {
       }
 
       console.log("✅ joinPool success:", txid);
-      socket.emit("join-game", { gameId, token });
+
+      const emitJoinGame = () => {
+        console.log("📤 Emitting join-game with:", { gameId, token });
+        socket.emit("join-game", { gameId, token }, (response: any) => {
+          console.log("✅ Server acknowledged join-game:", response);
+        });
+        setJoined(true);
+      };
+
+      if (socket.connected) {
+        emitJoinGame();
+      } else {
+        console.log("⏳ Socket not ready, waiting to emit join-game...");
+        socket.once("connect", emitJoinGame);
+      }
+
+      setJoined(true);
     } catch (err: any) {
       const errMsg = err?.message || "";
 
@@ -134,7 +152,20 @@ export default function LobbyPage() {
           "this transaction has successfully landed onchain , proceeding..."
         );
 
-        socket.emit("join-game", { gameId, token });
+        const emitJoinGame = () => {
+          console.log("📤 Emitting join-game with (retry):", { gameId, token });
+          socket.emit("join-game", { gameId, token }, (response: any) => {
+            console.log("✅ Server acknowledged retry join-game:", response);
+          });
+          setJoined(true);
+        };
+
+        if (socket.connected) {
+          emitJoinGame();
+        } else {
+          console.log("⏳ Waiting for socket reconnect before retry emit...");
+          socket.once("connect", emitJoinGame);
+        }
         return;
       }
 
@@ -148,6 +179,7 @@ export default function LobbyPage() {
   };
 
   const handleJoinConfirm = () => {
+    console.log("🟢 Confirmation clicked");
     setShowConfirmation(false);
   };
 
@@ -158,24 +190,25 @@ export default function LobbyPage() {
       !signTransaction ||
       joined ||
       !token ||
+      !socket ||
       showConfirmation
     )
       return;
 
-    setJoined(true);
+    if (!socket.connected) {
+      socket.connect();
+    }
 
-    if (!socket.connected) socket.connect();
-
-    socket.on("connect", () => {
+    const handleSocketConnect = () => {
       console.log("✅ Socket connected:", socket.id);
-    });
-    socket.on("disconnect", () => {
+      joinGame();
+    };
+
+    const handleSocketDisconnect = () => {
       console.log("❌ Socket disconnected");
-    });
+    };
 
-    joinGame();
-
-    socket.on("existing-players", (playersList) => {
+    const handleExistingPlayers = (playersList: any[]) => {
       console.log("📋 Existing players received:", playersList);
       setPlayers(
         playersList.map((p) => ({
@@ -183,11 +216,12 @@ export default function LobbyPage() {
           username: p.username || `anon_${p.userId.slice(0, 4)}`,
         }))
       );
-    });
+    };
 
-    socket.on("player-joined", (data) => {
+    const handlePlayerJoined = (data: any) => {
       console.log("📥 player-joined:", data);
       if (!data?.userId) return;
+
       setPlayers((prev) => {
         if (prev.some((p) => p.userId === data.userId)) return prev;
         return [
@@ -198,20 +232,30 @@ export default function LobbyPage() {
           },
         ];
       });
-    });
+    };
 
-    socket.on("start-game", () => {
+    const handleStartGame = () => {
+      console.log("🚀 start-game received");
       router.push(`/game/${gameId}`);
-    });
+    };
+
+    socket.on("connect", handleSocketConnect);
+    socket.on("disconnect", handleSocketDisconnect);
+    socket.on("existing-players", handleExistingPlayers);
+    socket.on("player-joined", handlePlayerJoined);
+    socket.on("start-game", handleStartGame);
+
+    // If already connected (e.g. HMR reload), call manually
+    if (socket.connected) handleSocketConnect();
 
     return () => {
-      socket.off("player-joined");
-      socket.off("existing-players");
-      socket.off("start-game");
-      socket.off("connect");
-      socket.off("disconnect");
+      socket.off("connect", handleSocketConnect);
+      socket.off("disconnect", handleSocketDisconnect);
+      socket.off("existing-players", handleExistingPlayers);
+      socket.off("player-joined", handlePlayerJoined);
+      socket.off("start-game", handleStartGame);
     };
-  }, [gameId, publicKey, signTransaction, showConfirmation]);
+  }, [gameId, publicKey, signTransaction, joined, showConfirmation]);
 
   return (
     <>

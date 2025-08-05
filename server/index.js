@@ -25,7 +25,7 @@ function setupSocketServer(io) {
   io.on("connection", (socket) => {
     console.log(`🔌 Player connected: ${socket.id}`);
 
-    socket.on("join-game", async ({ gameId, token }) => {
+    socket.on("join-game", async ({ gameId, token }, callback) => {
       try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const userId = decoded.userId;
@@ -78,6 +78,9 @@ function setupSocketServer(io) {
         console.error("❌ Token verification failed:", err);
         socket.emit("error", { message: "Invalid token" });
       }
+
+      console.log("Player joined:", socket.id);
+      callback?.({ status: "ok" });
     });
 
     socket.on("score-update", (data) => {
