@@ -159,7 +159,9 @@ export default function QuizGamePage() {
     setGameState((prev) => ({ ...prev, timeLeft }));
   }, [timeLeft]);
 
-  const selectAnswer = async (index: number) => {
+  // game/page.tsx - Refactored selectAnswer function
+
+  const selectAnswer = async (index: number | string) => {
     if (answered) return;
 
     const token = sessionStorage.getItem("jwt");
@@ -174,15 +176,14 @@ export default function QuizGamePage() {
       return;
     }
 
-    setAnswered(true); // 👈 UI immediately locks the selection
+    setAnswered(true);
     setGameState((prev) => ({
       ...prev,
       selectedAnswer: index,
     }));
 
-    // Start a fallback timeout: if response takes too long, still show something
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000); // 2s max wait
+    const timeout = setTimeout(() => controller.abort(), 3000); // 3s max wait
 
     try {
       const res = await fetch("/api/quiz/answer", {
@@ -203,19 +204,31 @@ export default function QuizGamePage() {
       clearTimeout(timeout);
 
       const data = await res.json();
-
       if (!data.success) {
         console.warn("Failed to submit answer:", data.message || data.error);
+        // Even on failure, show the correct answer if the API provides it
+        if (data.result?.correctAnswer) {
+          setGameState((prev) => ({
+            ...prev,
+            correctAnswer: data.result.correctAnswer,
+          }));
+        }
         return;
       }
 
       const { isCorrect, points, correctAnswer } = data.result;
 
+      // --- THIS IS THE FIX ---
+      // 1. Calculate the new score and streak first, before setting state.
+      const newScore = gameState.score + points;
+      const newStreak = isCorrect ? gameState.streak + 1 : 0;
+
+      // 2. Update the state using the new values.
       setGameState((prev) => ({
         ...prev,
         isCorrect,
-        score: prev.score + points,
-        streak: isCorrect ? prev.streak + 1 : 0,
+        score: newScore,
+        streak: newStreak,
         multiplier: isCorrect ? prev.multiplier + 1 : 1,
         perfectAnswers: isCorrect
           ? prev.perfectAnswers + 1
@@ -223,16 +236,18 @@ export default function QuizGamePage() {
         correctAnswer,
       }));
 
+      // 3. Emit the socket event using the same, correct new values.
       socket.emit("score-update", {
         gameId,
         userId,
-        score: gameState.score + points,
+        score: newScore,
       });
+      // --- END OF FIX ---
     } catch (err) {
-      console.warn("Answer submission failed or slow:", err);
+      console.warn("Answer submission failed or was too slow:", err);
       setGameState((prev) => ({
         ...prev,
-        isCorrect: false,
+        isCorrect: false, // Assume incorrect on network failure
         correctAnswer: null,
       }));
     }
