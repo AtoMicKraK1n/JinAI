@@ -3,14 +3,14 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import socket from "@/lib/socket";
+import { io, Socket } from "socket.io-client";
 import GameScreen from "@/components/GameScreen";
 import ParticleBackground from "@/components/ParticleBackground";
 import Navbar from "@/components/Navbar";
 import { useTimer } from "@/hooks/useTimer";
 import { getDifficultyColor } from "@/lib/utils";
 
-socket.connect();
+const socket: Socket = io("http://localhost:4000");
 
 function getCurrentUserId(): string | null {
   try {
@@ -159,9 +159,7 @@ export default function QuizGamePage() {
     setGameState((prev) => ({ ...prev, timeLeft }));
   }, [timeLeft]);
 
-  // game/page.tsx - Refactored selectAnswer function
-
-  const selectAnswer = async (index: number | string) => {
+  const selectAnswer = async (index: number) => {
     if (answered) return;
 
     const token = sessionStorage.getItem("jwt");
@@ -176,15 +174,6 @@ export default function QuizGamePage() {
       return;
     }
 
-    setAnswered(true);
-    setGameState((prev) => ({
-      ...prev,
-      selectedAnswer: index,
-    }));
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000); // 3s max wait
-
     try {
       const res = await fetch("/api/quiz/answer", {
         method: "POST",
@@ -192,7 +181,6 @@ export default function QuizGamePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        signal: controller.signal,
         body: JSON.stringify({
           gameId,
           questionId: currentQ.id,
@@ -201,34 +189,24 @@ export default function QuizGamePage() {
         }),
       });
 
-      clearTimeout(timeout);
-
       const data = await res.json();
+
       if (!data.success) {
         console.warn("Failed to submit answer:", data.message || data.error);
-        // Even on failure, show the correct answer if the API provides it
-        if (data.result?.correctAnswer) {
-          setGameState((prev) => ({
-            ...prev,
-            correctAnswer: data.result.correctAnswer,
-          }));
-        }
         return;
       }
 
       const { isCorrect, points, correctAnswer } = data.result;
 
-      // --- THIS IS THE FIX ---
-      // 1. Calculate the new score and streak first, before setting state.
-      const newScore = gameState.score + points;
-      const newStreak = isCorrect ? gameState.streak + 1 : 0;
+      setAnswered(true);
 
-      // 2. Update the state using the new values.
       setGameState((prev) => ({
         ...prev,
+        selectedAnswer: index,
+        totalQuestions: prev.totalQuestions,
         isCorrect,
-        score: newScore,
-        streak: newStreak,
+        score: prev.score + points,
+        streak: isCorrect ? prev.streak + 1 : 0,
         multiplier: isCorrect ? prev.multiplier + 1 : 1,
         perfectAnswers: isCorrect
           ? prev.perfectAnswers + 1
@@ -236,27 +214,20 @@ export default function QuizGamePage() {
         correctAnswer,
       }));
 
-      // 3. Emit the socket event using the same, correct new values.
       socket.emit("score-update", {
         gameId,
         userId,
-        score: newScore,
+        score: gameState.score + points,
       });
-      // --- END OF FIX ---
     } catch (err) {
-      console.warn("Answer submission failed or was too slow:", err);
-      setGameState((prev) => ({
-        ...prev,
-        isCorrect: false, // Assume incorrect on network failure
-        correctAnswer: null,
-      }));
+      console.error("Error submitting answer:", err);
     }
   };
 
   const nextQuestion = () => {
     const next = gameState.currentQuestion + 1;
     if (next >= questions.length) {
-      router.push(`/results/${gameId}`);
+      router.push(`/quiz/${gameId}/results`);
     } else {
       if (isHost) {
         socket.emit("next-question", next);
@@ -286,13 +257,8 @@ export default function QuizGamePage() {
             getDifficultyColor={getDifficultyColor}
           />
         ) : (
-          <div className="flex items-center justify-center h-screen">
-            <div className="neo-card bg-yellow-400 px-8 py-6 text-white text-lg text-center rounded-xl shadow-lg">
-              Loading questions...
-              <div className="mt-4 flex justify-center">
-                <div className="loader"></div>
-              </div>
-            </div>
+          <div className="text-white text-center pt-24 text-xl">
+            Loading questions or something went wrong...
           </div>
         )}
       </motion.div>
