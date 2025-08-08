@@ -75,8 +75,9 @@ export default function QuizGamePage() {
     setUserId(getCurrentUserId());
   }, []);
 
+  // Inside your main useEffect (the one that sets up all socket listeners)
   useEffect(() => {
-    if (!userId) return; // wait until userId is set in browser
+    if (!userId) return;
     const token = sessionStorage.getItem("jwt");
     if (!token || !gameId) return;
 
@@ -119,6 +120,36 @@ export default function QuizGamePage() {
       startTimer();
     });
 
+    // ✅ New: Listen for answer results from the server
+    socket.on("answer-result", (data) => {
+      console.log("📩 Received answer result:", data);
+
+      const { userId: answeredUser, isCorrect, points, correctAnswer } = data;
+
+      // Only update this player's UI if it's their result
+      if (answeredUser === userId) {
+        setGameState((prev) => ({
+          ...prev,
+          isCorrect,
+          score: prev.score + points,
+          streak: isCorrect ? prev.streak + 1 : 0,
+          multiplier: isCorrect ? prev.multiplier + 1 : 1,
+          perfectAnswers: isCorrect
+            ? prev.perfectAnswers + 1
+            : prev.perfectAnswers,
+          correctAnswer,
+        }));
+      }
+
+      // Update scoreboard for everyone
+      setPlayers((prev) =>
+        prev.map((p) =>
+          p.userId === answeredUser ? { ...p, score: p.score + points } : p
+        )
+      );
+    });
+
+    // Fetch seed questions
     fetch(`/api/games/seed-questions`, {
       method: "POST",
       headers: {
@@ -160,6 +191,7 @@ export default function QuizGamePage() {
       socket.off("start-game");
       socket.off("existing-players");
       socket.off("next-question");
+      socket.off("answer-result"); // ✅ cleanup new listener
     };
   }, [gameId, userId, isHost]);
 

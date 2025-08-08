@@ -155,15 +155,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Convert correct answer letter to numeric index for frontend compatibility
+    // ✅ Convert correct answer letter to numeric index
     const correctAnswerIndex = answerMap.indexOf(question.correctAnswer);
+
+    // 📢 Broadcast result to all players in the game via WebSocket
+    if (global.io) {
+      global.io.to(gameId).emit("answer-result", {
+        userId,
+        questionId,
+        isCorrect,
+        correctAnswer: correctAnswerIndex,
+        points,
+        responseTime,
+      });
+    }
 
     return NextResponse.json({
       success: true,
       result: {
         isCorrect,
         points,
-        correctAnswer: correctAnswerIndex, // ✅ numeric index
+        correctAnswer: correctAnswerIndex,
         responseTime,
       },
     });
