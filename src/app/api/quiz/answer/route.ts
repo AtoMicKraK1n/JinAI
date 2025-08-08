@@ -155,12 +155,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Convert correct answer letter to numeric index for frontend compatibility
+    const correctAnswerIndex = answerMap.indexOf(question.correctAnswer);
+
     return NextResponse.json({
       success: true,
       result: {
         isCorrect,
         points,
-        correctAnswer: question.correctAnswer,
+        correctAnswer: correctAnswerIndex, // ✅ numeric index
         responseTime,
       },
     });
