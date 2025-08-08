@@ -12,7 +12,9 @@ import socket from "@/lib/socket";
 
 socket.connect();
 
+// ✅ Safe helper – only runs in browser
 function getCurrentUserId(): string | null {
+  if (typeof window === "undefined") return null;
   try {
     const token = sessionStorage.getItem("jwt");
     if (!token) return null;
@@ -34,6 +36,7 @@ export default function QuizGamePage() {
   const [questions, setQuestions] = useState<any[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [answered, setAnswered] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   const [gameState, setGameState] = useState({
     currentQuestion: 0,
@@ -48,7 +51,6 @@ export default function QuizGamePage() {
     correctAnswer: null,
   });
 
-  const userId = getCurrentUserId();
   const isHost = players[0]?.userId === userId;
 
   const { timeLeft, startTimer } = useTimer({
@@ -68,7 +70,13 @@ export default function QuizGamePage() {
     dependencies: [gameState.currentQuestion],
   });
 
+  // ✅ Get userId only in browser
   useEffect(() => {
+    setUserId(getCurrentUserId());
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return; // wait until userId is set in browser
     const token = sessionStorage.getItem("jwt");
     if (!token || !gameId) return;
 
@@ -153,7 +161,7 @@ export default function QuizGamePage() {
       socket.off("existing-players");
       socket.off("next-question");
     };
-  }, [gameId]);
+  }, [gameId, userId, isHost]);
 
   useEffect(() => {
     setGameState((prev) => ({ ...prev, timeLeft }));
@@ -174,15 +182,14 @@ export default function QuizGamePage() {
       return;
     }
 
-    setAnswered(true); // 👈 UI immediately locks the selection
+    setAnswered(true);
     setGameState((prev) => ({
       ...prev,
       selectedAnswer: index,
     }));
 
-    // Start a fallback timeout: if response takes too long, still show something
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000); // 2s max wait
+    const timeout = setTimeout(() => controller.abort(), 2000);
 
     try {
       const res = await fetch("/api/quiz/answer", {
