@@ -6,7 +6,7 @@ import { IconCheck, IconX } from "@tabler/icons-react";
 
 interface Question {
   options: string[] | undefined;
-  correctAnswer: number;
+  correctAnswer: string | number; // ✅ Accept both types
 }
 
 interface GameState {
@@ -32,17 +32,28 @@ const AnswerOptions: React.FC<AnswerOptionsProps> = ({
     return <div className="text-red-400">Invalid question data</div>;
   }
 
+  // ✅ Convert correctAnswer to numeric index if it's a string
+  const getCorrectAnswerIndex = () => {
+    if (typeof currentQuestion.correctAnswer === "number") {
+      return currentQuestion.correctAnswer;
+    }
+    // Convert "A", "B", "C", "D" to 0, 1, 2, 3
+    const letterIndex = ["A", "B", "C", "D"].indexOf(
+      String(currentQuestion.correctAnswer).toUpperCase().trim()
+    );
+    return letterIndex >= 0 ? letterIndex : 0;
+  };
+
+  const correctAnswerIndex = getCorrectAnswerIndex();
+
   const getCircleStyle = (index: number) => {
     if (!gameState.answered)
       return "bg-gray-800/50 border-gray-600 text-gray-400";
 
-    if (index === currentQuestion.correctAnswer)
+    if (index === correctAnswerIndex)
       return "bg-green-500 border-green-400 text-white";
 
-    if (
-      index === gameState.selectedAnswer &&
-      index !== currentQuestion.correctAnswer
-    )
+    if (index === gameState.selectedAnswer && index !== correctAnswerIndex)
       return "bg-red-500 border-red-400 text-white";
 
     return "bg-gray-800/50 border-gray-600 text-gray-400";
@@ -51,7 +62,7 @@ const AnswerOptions: React.FC<AnswerOptionsProps> = ({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       {currentQuestion.options.map((option, index) => {
-        const isCorrect = index === currentQuestion.correctAnswer;
+        const isCorrect = index === correctAnswerIndex;
         const isWrongSelected =
           index === gameState.selectedAnswer && !gameState.isCorrect;
 

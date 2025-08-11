@@ -122,31 +122,28 @@ export default function QuizGamePage() {
 
     // ✅ New: Listen for answer results from the server
     socket.on("answer-result", (data) => {
-      console.log("📩 Received answer result:", data);
+      console.log("📩 Received WebSocket answer result:", data);
 
       const { userId: answeredUser, isCorrect, points, correctAnswer } = data;
 
-      // Only update this player's UI if it's their result
-      if (answeredUser === userId) {
-        setGameState((prev) => ({
-          ...prev,
-          isCorrect,
-          score: prev.score + points,
-          streak: isCorrect ? prev.streak + 1 : 0,
-          multiplier: isCorrect ? prev.multiplier + 1 : 1,
-          perfectAnswers: isCorrect
-            ? prev.perfectAnswers + 1
-            : prev.perfectAnswers,
-          correctAnswer,
-        }));
-      }
+      // ✅ Only update UI state if it's NOT the current user (avoid duplicate updates)
+      if (answeredUser !== userId) {
+        console.log("📊 Updating other player's score:", {
+          answeredUser,
+          points,
+        });
 
-      // Update scoreboard for everyone
-      setPlayers((prev) =>
-        prev.map((p) =>
-          p.userId === answeredUser ? { ...p, score: p.score + points } : p
-        )
-      );
+        // Update scoreboard for other players
+        setPlayers((prev) =>
+          prev.map((p) =>
+            p.userId === answeredUser ? { ...p, score: p.score + points } : p
+          )
+        );
+      } else {
+        console.log(
+          "🔄 Skipping self-update (already handled by API response)"
+        );
+      }
     });
 
     // Fetch seed questions
@@ -250,6 +247,13 @@ export default function QuizGamePage() {
 
       const { isCorrect, points, correctAnswer } = data.result;
 
+      console.log("📩 Direct API response:", {
+        isCorrect,
+        points,
+        correctAnswer,
+      });
+
+      // ✅ Update game state with API response
       setGameState((prev) => ({
         ...prev,
         isCorrect,
@@ -262,11 +266,8 @@ export default function QuizGamePage() {
         correctAnswer,
       }));
 
-      socket.emit("score-update", {
-        gameId,
-        userId,
-        score: gameState.score + points,
-      });
+      // ✅ Don't emit score-update here - let WebSocket handle it
+      // The API already broadcasts via WebSocket, so this creates duplicate updates
     } catch (err) {
       console.warn("Answer submission failed or slow:", err);
       setGameState((prev) => ({

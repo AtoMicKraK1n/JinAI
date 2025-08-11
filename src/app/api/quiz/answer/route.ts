@@ -78,16 +78,39 @@ export async function POST(request: NextRequest) {
     const answerMap = ["A", "B", "C", "D"];
     const selectedLetter = answerMap[selectedAnswer];
 
+    // ✅ Safer normalization with validation
+    let correctLetter: string;
+    const rawCorrectAnswer = String(question.correctAnswer)
+      .toUpperCase()
+      .trim();
+
+    // Validate that it's a valid option
+    if (["A", "B", "C", "D"].includes(rawCorrectAnswer)) {
+      correctLetter = rawCorrectAnswer;
+    } else if (["0", "1", "2", "3"].includes(rawCorrectAnswer)) {
+      // Handle if stored as string numbers
+      correctLetter = answerMap[parseInt(rawCorrectAnswer)];
+    } else {
+      console.error("❌ Invalid correctAnswer in DB:", question.correctAnswer);
+      return NextResponse.json(
+        { error: "Invalid question data" },
+        { status: 500 }
+      );
+    }
+
+    const isCorrect =
+      selectedLetter.toUpperCase().trim() ===
+      correctLetter.toUpperCase().trim();
+
     console.log("🧪 DEBUG - Answer Comparison", {
       userId,
       questionId,
       selectedAnswer,
       selectedLetter,
-      correctAnswer: question.correctAnswer,
+      correctLetter,
+      correctAnswerFromDB: question.correctAnswer,
+      isCorrect,
     });
-
-    const isCorrect = selectedLetter === question.correctAnswer;
-    console.log("✅ Answer is correct?", isCorrect);
 
     let points = 0;
     if (isCorrect) {
@@ -155,8 +178,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ✅ Convert correct answer letter to numeric index
-    const correctAnswerIndex = answerMap.indexOf(question.correctAnswer);
+    // ✅ Convert correct letter to numeric index for frontend
+    const correctAnswerIndex = answerMap.indexOf(correctLetter);
 
     // 📢 Broadcast result to all players in the game via WebSocket
     if (global.io) {
