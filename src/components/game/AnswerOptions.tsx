@@ -6,7 +6,7 @@ import { IconCheck, IconX } from "@tabler/icons-react";
 
 interface Question {
   options: string[] | undefined;
-  correctAnswer: string | number; // ✅ Accept both types
+  correctAnswer: string | number;
 }
 
 interface GameState {
@@ -32,20 +32,28 @@ const AnswerOptions: React.FC<AnswerOptionsProps> = ({
     return <div className="text-red-400">Invalid question data</div>;
   }
 
-  // ✅ Convert correctAnswer to numeric index if it's a string
+  // Convert correctAnswer to index
   const getCorrectAnswerIndex = () => {
-    if (typeof currentQuestion.correctAnswer === "number") {
-      return currentQuestion.correctAnswer;
+    const val = currentQuestion.correctAnswer;
+
+    if (typeof val === "number" && val >= 0 && val <= 3) {
+      return val;
     }
-    // Convert "A", "B", "C", "D" to 0, 1, 2, 3
-    const letterIndex = ["A", "B", "C", "D"].indexOf(
-      String(currentQuestion.correctAnswer).toUpperCase().trim()
-    );
-    return letterIndex >= 0 ? letterIndex : 0;
+
+    if (typeof val === "string") {
+      const letterIndex = ["A", "B", "C", "D"].indexOf(
+        val.toUpperCase().trim()
+      );
+      if (letterIndex >= 0) return letterIndex;
+    }
+
+    console.warn("⚠ Invalid correctAnswer format:", val);
+    return 0;
   };
 
   const correctAnswerIndex = getCorrectAnswerIndex();
 
+  // Circle background color
   const getCircleStyle = (index: number) => {
     if (!gameState.answered)
       return "bg-gray-800/50 border-gray-600 text-gray-400";
@@ -63,8 +71,8 @@ const AnswerOptions: React.FC<AnswerOptionsProps> = ({
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
       {currentQuestion.options.map((option, index) => {
         const isCorrect = index === correctAnswerIndex;
-        const isWrongSelected =
-          index === gameState.selectedAnswer && !gameState.isCorrect;
+        const isSelected = index === gameState.selectedAnswer;
+        const isWrongSelected = gameState.answered && isSelected && !isCorrect;
 
         return (
           <motion.button
@@ -88,6 +96,7 @@ const AnswerOptions: React.FC<AnswerOptionsProps> = ({
             }
             whileTap={!gameState.answered ? { scale: 0.98 } : {}}
           >
+            {/* Background Hover Glow */}
             <div className="absolute inset-0 bg-gradient-to-r from-golden-400/0 to-golden-400/0 group-hover:from-golden-400/10 group-hover:to-golden-400/5 transition-all duration-300" />
 
             <div className="relative flex items-center justify-between">
@@ -105,23 +114,21 @@ const AnswerOptions: React.FC<AnswerOptionsProps> = ({
                 </span>
               </div>
 
-              {/* Right: Icon */}
-              <div className="text-right">
-                {gameState.answered && (
-                  <motion.div
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.2 }}
-                  >
-                    {isCorrect && (
-                      <IconCheck className="text-green-400" size={32} />
-                    )}
-                    {isWrongSelected && (
-                      <IconX className="text-red-400" size={32} />
-                    )}
-                  </motion.div>
-                )}
-              </div>
+              {/* Right: Icons */}
+              {gameState.answered && (
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ delay: 0.15 }}
+                >
+                  {isCorrect && (
+                    <IconCheck className="text-green-400" size={32} />
+                  )}
+                  {isWrongSelected && (
+                    <IconX className="text-red-400" size={32} />
+                  )}
+                </motion.div>
+              )}
             </div>
           </motion.button>
         );

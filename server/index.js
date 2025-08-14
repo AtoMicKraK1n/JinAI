@@ -51,6 +51,7 @@ function setupSocketServer(io) {
         console.log("✅ join-game triggered with:", gameId, userId);
         console.log("📤 Emitting player-joined:", { userId, username });
 
+        // ✅ Get participants with their current scores
         const allParticipants = await prisma.gameParticipant.findMany({
           where: { gameId },
           include: { user: true },
@@ -59,6 +60,7 @@ function setupSocketServer(io) {
         const existingPlayers = allParticipants.map((p) => ({
           userId: p.userId,
           username: p.user.username || `Player_${p.userId.slice(-4)}`,
+          score: p.finalScore || 0, // ✅ Include current score
         }));
 
         // 🔁 1. Send existing players to the current socket first
@@ -68,6 +70,7 @@ function setupSocketServer(io) {
         socket.to(gameId).emit("player-joined", {
           userId,
           username,
+          score: participant.finalScore || 0, // ✅ Include score for new player
         });
 
         if (existingPlayers.length === 4) {
@@ -83,9 +86,35 @@ function setupSocketServer(io) {
       callback?.({ status: "ok" });
     });
 
-    socket.on("score-update", (data) => {
-      if (!data.gameId) return;
-      io.to(data.gameId).emit("score-update", data);
+    // ✅ Enhanced score update with real-time sync
+    socket.on("score-update", async (data) => {
+      if (!data.gameId || !data.userId) return;
+
+      try {
+        // ✅ Get updated score from database to ensure accuracy
+        const participant = await prisma.gameParticipant.findFirst({
+          where: {
+            gameId: data.gameId,
+            userId: data.userId,
+          },
+        });
+
+        if (participant) {
+          const scoreUpdate = {
+            userId: data.userId,
+            score: participant.finalScore || 0,
+            gameId: data.gameId,
+          };
+
+          // ✅ Broadcast to all players in the game
+          io.to(data.gameId).emit("score-update", scoreUpdate);
+          console.log(
+            `📊 Score updated for ${data.userId}: ${scoreUpdate.score}`
+          );
+        }
+      } catch (error) {
+        console.error("❌ Error updating score:", error);
+      }
     });
 
     socket.on("send-countdown", ({ gameId, seconds = 10 }) => {
@@ -131,8 +160,8 @@ function setupSocketServer(io) {
       io.to(roomId).emit("timer-expired", { roomId });
     });
 
-    // ✅ NEW: next-question handler
-    socket.on("next-question", (index) => {
+    // ✅ Enhanced next-question handler with score sync
+    socket.on("next-question", async (index) => {
       const gameId = socket.data.gameId;
       if (!gameId) {
         console.warn("❌ No gameId found on socket, can't emit next-question");
@@ -142,6 +171,26 @@ function setupSocketServer(io) {
       console.log(
         `➡️ Host triggered next-question ${index} for game ${gameId}`
       );
+
+      // ✅ Before moving to next question, sync all scores
+      try {
+        const allParticipants = await prisma.gameParticipant.findMany({
+          where: { gameId },
+          include: { user: true },
+        });
+
+        const updatedPlayers = allParticipants.map((p) => ({
+          userId: p.userId,
+          username: p.user.username || `Player_${p.userId.slice(-4)}`,
+          score: p.finalScore || 0,
+        }));
+
+        // ✅ Send updated scores to all players
+        io.to(gameId).emit("players-score-sync", updatedPlayers);
+      } catch (error) {
+        console.error("❌ Error syncing scores before next question:", error);
+      }
+
       io.to(gameId).emit("next-question", index);
     });
 

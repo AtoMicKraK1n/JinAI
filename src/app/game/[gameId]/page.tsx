@@ -37,6 +37,7 @@ export default function QuizGamePage() {
   const [isRunning, setIsRunning] = useState(false);
   const [answered, setAnswered] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [questionStartTime, setQuestionStartTime] = useState<number>(0);
 
   const [gameState, setGameState] = useState({
     currentQuestion: 0,
@@ -75,6 +76,22 @@ export default function QuizGamePage() {
     setUserId(getCurrentUserId());
   }, []);
 
+  useEffect(() => {
+    console.log("🎮 Game State Updated:", {
+      answered: answered,
+      selectedAnswer: gameState.selectedAnswer,
+      isCorrect: gameState.isCorrect,
+      correctAnswer: gameState.correctAnswer,
+      score: gameState.score,
+    });
+  }, [
+    answered,
+    gameState.selectedAnswer,
+    gameState.isCorrect,
+    gameState.correctAnswer,
+    gameState.score,
+  ]);
+
   // Inside your main useEffect (the one that sets up all socket listeners)
   useEffect(() => {
     if (!userId) return;
@@ -84,13 +101,18 @@ export default function QuizGamePage() {
     socket.emit("join-game", { gameId, token });
 
     socket.on("existing-players", (playersList) => {
-      setPlayers(playersList);
+      // ✅ Initialize players with scores
+      const playersWithScores = playersList.map((player: any) => ({
+        ...player,
+        score: player.score || 0,
+      }));
+      setPlayers(playersWithScores);
     });
 
     socket.on("player-joined", (data) => {
       setPlayers((prev) => {
         const exists = prev.some((p) => p.userId === data.userId);
-        return exists ? prev : [...prev, data];
+        return exists ? prev : [...prev, { ...data, score: 0 }];
       });
     });
 
@@ -105,6 +127,7 @@ export default function QuizGamePage() {
     socket.on("start-game", () => {
       console.log("🔥 Game started");
       setIsRunning(true);
+      setQuestionStartTime(Date.now()); // ✅ Track when question starts
     });
 
     socket.on("next-question", (index: number) => {
@@ -117,32 +140,35 @@ export default function QuizGamePage() {
         totalQuestions: prev.totalQuestions,
       }));
       setAnswered(false);
+      setQuestionStartTime(Date.now()); // ✅ Reset timer for new question
       startTimer();
     });
 
-    // ✅ New: Listen for answer results from the server
+    // ✅ Enhanced: Listen for answer results from the server
     socket.on("answer-result", (data) => {
       console.log("📩 Received WebSocket answer result:", data);
 
       const { userId: answeredUser, isCorrect, points, correctAnswer } = data;
 
-      // ✅ Only update UI state if it's NOT the current user (avoid duplicate updates)
-      if (answeredUser !== userId) {
-        console.log("📊 Updating other player's score:", {
-          answeredUser,
-          points,
-        });
+      // ✅ Update all players' scores in real-time
+      setPlayers((prev) =>
+        prev.map((player) => {
+          if (player.userId === answeredUser) {
+            return {
+              ...player,
+              score: (player.score || 0) + points,
+            };
+          }
+          return player;
+        })
+      );
 
-        // Update scoreboard for other players
-        setPlayers((prev) =>
-          prev.map((p) =>
-            p.userId === answeredUser ? { ...p, score: p.score + points } : p
-          )
-        );
-      } else {
-        console.log(
-          "🔄 Skipping self-update (already handled by API response)"
-        );
+      // ✅ If it's another player's answer, show the correct answer
+      if (answeredUser !== userId) {
+        setGameState((prev) => ({
+          ...prev,
+          correctAnswer: correctAnswer,
+        }));
       }
     });
 
@@ -188,7 +214,7 @@ export default function QuizGamePage() {
       socket.off("start-game");
       socket.off("existing-players");
       socket.off("next-question");
-      socket.off("answer-result"); // ✅ cleanup new listener
+      socket.off("answer-result");
     };
   }, [gameId, userId, isHost]);
 
@@ -197,28 +223,59 @@ export default function QuizGamePage() {
   }, [timeLeft]);
 
   const selectAnswer = async (index: number) => {
-    if (answered) return;
+    if (typeof window === "undefined") return;
 
     const token = sessionStorage.getItem("jwt");
-    if (!token || !userId) {
-      console.warn("JWT missing, cannot submit answer");
+    if (!token) {
+      console.error("❌ No JWT found in sessionStorage");
       return;
     }
 
     const currentQ = questions[gameState.currentQuestion];
-    if (!currentQ) {
-      console.warn("No current question");
+
+    if (!token || !currentQ) {
+      console.error("❌ Missing token or current question");
       return;
     }
 
+    // ✅ Calculate actual response time
+    const responseTime = Date.now() - questionStartTime;
+
+    // ✅ INSTANTLY show feedback before API call
     setAnswered(true);
     setGameState((prev) => ({
       ...prev,
       selectedAnswer: index,
     }));
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    // ✅ Get the correct answer immediately from question data
+    const getCorrectAnswerIndex = () => {
+      const val = currentQ.correctAnswer;
+
+      if (typeof val === "number" && val >= 0 && val <= 3) {
+        return val;
+      }
+
+      if (typeof val === "string") {
+        const letterIndex = ["A", "B", "C", "D"].indexOf(
+          val.toUpperCase().trim()
+        );
+        if (letterIndex >= 0) return letterIndex;
+      }
+
+      console.warn("⚠ Invalid correctAnswer format:", val);
+      return 0;
+    };
+
+    const correctIndex = getCorrectAnswerIndex();
+    const isCorrectAnswer = index === correctIndex;
+
+    // ✅ INSTANTLY update UI state with correct answer
+    setGameState((prev) => ({
+      ...prev,
+      isCorrect: isCorrectAnswer,
+      correctAnswer: correctIndex,
+    }));
 
     try {
       const res = await fetch("/api/quiz/answer", {
@@ -227,54 +284,45 @@ export default function QuizGamePage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        signal: controller.signal,
         body: JSON.stringify({
           gameId,
-          questionId: currentQ.id,
+          userId,
           selectedAnswer: index,
-          responseTime: (30 - gameState.timeLeft) * 1000,
+          questionId: currentQ.id,
+          responseTime, // ✅ Send actual response time
         }),
       });
 
-      clearTimeout(timeout);
-
       const data = await res.json();
 
-      if (!data.success) {
-        console.warn("Failed to submit answer:", data.message || data.error);
-        return;
-      }
-
-      const { isCorrect, points, correctAnswer } = data.result;
-
-      console.log("📩 Direct API response:", {
-        isCorrect,
-        points,
-        correctAnswer,
-      });
-
-      // ✅ Update game state with API response
+      // ✅ Update score from server response (this ensures accuracy)
       setGameState((prev) => ({
         ...prev,
-        isCorrect,
-        score: prev.score + points,
-        streak: isCorrect ? prev.streak + 1 : 0,
-        multiplier: isCorrect ? prev.multiplier + 1 : 1,
-        perfectAnswers: isCorrect
+        score: prev.score + data.result.points,
+        streak: data.result.isCorrect ? prev.streak + 1 : 0,
+        multiplier: data.result.isCorrect ? prev.multiplier + 1 : 1,
+        perfectAnswers: data.result.isCorrect
           ? prev.perfectAnswers + 1
           : prev.perfectAnswers,
-        correctAnswer,
       }));
 
-      // ✅ Don't emit score-update here - let WebSocket handle it
-      // The API already broadcasts via WebSocket, so this creates duplicate updates
-    } catch (err) {
-      console.warn("Answer submission failed or slow:", err);
+      // ✅ Update own score in players list
+      setPlayers((prev) =>
+        prev.map((player) =>
+          player.userId === userId
+            ? { ...player, score: (player.score || 0) + data.result.points }
+            : player
+        )
+      );
+    } catch (error) {
+      console.error("Error submitting answer:", error);
+      // ✅ If API fails, revert the optimistic update
       setGameState((prev) => ({
         ...prev,
         isCorrect: false,
         correctAnswer: null,
       }));
+      setAnswered(false);
     }
   };
 
