@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
 
     const isHost = game.participants[0]?.userId === userId;
 
+    // ✅ Return game data for completed games
     if (game.status === "COMPLETED") {
       const finalResults = await prisma.gameParticipant.findMany({
         where: { gameId },
@@ -62,6 +63,13 @@ export async function GET(request: NextRequest) {
           finalScore: r.finalScore,
           username: r.user?.username || "Unknown",
         })),
+        // ✅ Include game data for claim functionality
+        gameData: {
+          poolIndex: game.poolIndex,
+          prizePool: game.prizePool,
+          status: game.status,
+          gameId: game.id,
+        },
       });
     }
 
@@ -154,32 +162,22 @@ export async function GET(request: NextRequest) {
       program.programId
     );
 
-    const rawPoolAccount = await program.account.pool.fetch(poolPda);
-
-    const playerPDAsOnChain = rawPoolAccount.playerAccounts.map(
-      (p: PublicKey) => p.toBase58()
-    );
-
-    const playerPDAsLocal = results.map((r) =>
-      PublicKey.findProgramAddressSync(
-        [
-          Buffer.from("player"),
-          poolIdBuffer,
-          new PublicKey(r.walletAddress).toBuffer(),
-        ],
-        program.programId
-      )[0].toBase58()
-    );
-
-    const reorderedResults = playerPDAsOnChain.map((onChainPda) => {
-      const idx = playerPDAsLocal.findIndex(
-        (localPda) => localPda === onChainPda
-      );
-      return results[idx];
+    console.log("🔍 On-chain PDAs:", {
+      poolPda: poolPda.toBase58(),
+      vaultPda: vaultPda.toBase58(),
+      globalStatePda: globalStatePda.toBase58(),
+      poolIndex,
     });
 
-    const finalPlayerPDAs = reorderedResults.map(
-      (r) =>
+    try {
+      const rawPoolAccount = await program.account.pool.fetch(poolPda);
+      console.log("✅ Pool account fetched successfully");
+
+      const playerPDAsOnChain = rawPoolAccount.playerAccounts.map(
+        (p: PublicKey) => p.toBase58()
+      );
+
+      const playerPDAsLocal = results.map((r) =>
         PublicKey.findProgramAddressSync(
           [
             Buffer.from("player"),
@@ -187,41 +185,72 @@ export async function GET(request: NextRequest) {
             new PublicKey(r.walletAddress).toBuffer(),
           ],
           program.programId
-        )[0]
-    );
+        )[0].toBase58()
+      );
 
-    // On-chain: set_results
-    const txSig = await program.methods
-      .setResults(playerRanks as [number, number, number, number])
-      .accountsPartial({
-        pool: poolPda,
-        globalState: globalStatePda,
-        authority: inGameKeypair.publicKey,
-        player1: finalPlayerPDAs[0],
-        player2: finalPlayerPDAs[1],
-        player3: finalPlayerPDAs[2],
-        player4: finalPlayerPDAs[3],
-      })
-      .signers([inGameKeypair])
-      .rpc({ commitment: "confirmed" });
+      const reorderedResults = playerPDAsOnChain.map((onChainPda) => {
+        const idx = playerPDAsLocal.findIndex(
+          (localPda) => localPda === onChainPda
+        );
+        return results[idx];
+      });
 
-    // On-chain: t_rewards
-    const rewardTxSig = await program.methods
-      .tRewards()
-      .accountsPartial({
-        pool: poolPda,
-        globalState: globalStatePda,
-        authority: inGameKeypair.publicKey,
-        poolVault: vaultPda,
-        treasury: new PublicKey("GkiKqSVfnU2y4TeUW7up2JS9Z8g1yjGYJ8x2QNf4K6Y"),
-        player1: finalPlayerPDAs[0],
-        player2: finalPlayerPDAs[1],
-        player3: finalPlayerPDAs[2],
-        player4: finalPlayerPDAs[3],
-        systemProgram: SystemProgram.programId,
-      })
-      .signers([inGameKeypair])
-      .rpc({ commitment: "confirmed" });
+      const finalPlayerPDAs = reorderedResults.map(
+        (r) =>
+          PublicKey.findProgramAddressSync(
+            [
+              Buffer.from("player"),
+              poolIdBuffer,
+              new PublicKey(r.walletAddress).toBuffer(),
+            ],
+            program.programId
+          )[0]
+      );
+
+      console.log("🎯 Setting results on-chain...");
+      // On-chain: set_results
+      const txSig = await program.methods
+        .setResults(playerRanks as [number, number, number, number])
+        .accountsPartial({
+          pool: poolPda,
+          globalState: globalStatePda,
+          authority: inGameKeypair.publicKey,
+          player1: finalPlayerPDAs[0],
+          player2: finalPlayerPDAs[1],
+          player3: finalPlayerPDAs[2],
+          player4: finalPlayerPDAs[3],
+        })
+        .signers([inGameKeypair])
+        .rpc({ commitment: "confirmed" });
+
+      console.log("✅ Set results transaction:", txSig);
+
+      console.log("💰 Distributing rewards on-chain...");
+      // On-chain: t_rewards
+      const rewardTxSig = await program.methods
+        .tRewards()
+        .accountsPartial({
+          pool: poolPda,
+          globalState: globalStatePda,
+          authority: inGameKeypair.publicKey,
+          poolVault: vaultPda,
+          treasury: new PublicKey(
+            "GkiKqSVfnU2y4TeUW7up2JS9Z8g1yjGYJ8x2QNf4K6Y"
+          ),
+          player1: finalPlayerPDAs[0],
+          player2: finalPlayerPDAs[1],
+          player3: finalPlayerPDAs[2],
+          player4: finalPlayerPDAs[3],
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([inGameKeypair])
+        .rpc({ commitment: "confirmed" });
+
+      console.log("✅ Reward distribution transaction:", rewardTxSig);
+    } catch (onChainError) {
+      console.error("❌ On-chain operation failed:", onChainError);
+      // Don't fail the entire operation if on-chain fails
+    }
 
     const finalResults = await prisma.gameParticipant.findMany({
       where: { gameId },
@@ -238,11 +267,21 @@ export async function GET(request: NextRequest) {
         finalScore: r.finalScore,
         username: r.user.username,
       })),
+      // ✅ Include game data for claim functionality
+      gameData: {
+        poolIndex: game.poolIndex,
+        prizePool: game.prizePool,
+        status: "COMPLETED",
+        gameId: game.id,
+      },
     });
   } catch (error) {
-    console.error("Results error:", error);
+    console.error("❌ Results error:", error);
     return NextResponse.json(
-      { error: "Failed to finalize results" },
+      {
+        error: "Failed to finalize results",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
