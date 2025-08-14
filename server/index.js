@@ -161,15 +161,19 @@ function setupSocketServer(io) {
     });
 
     // ✅ Enhanced next-question handler with score sync
-    socket.on("next-question", async (index) => {
-      const gameId = socket.data.gameId;
+    socket.on("next-question", async (data) => {
+      console.log("📨 Received next-question request:", data);
+
+      const gameId = data.gameId || socket.data.gameId;
+      const questionIndex = data.questionIndex || data;
+
       if (!gameId) {
         console.warn("❌ No gameId found on socket, can't emit next-question");
         return;
       }
 
       console.log(
-        `➡️ Host triggered next-question ${index} for game ${gameId}`
+        `➡️ Host triggered next-question ${questionIndex} for game ${gameId}`
       );
 
       // ✅ Before moving to next question, sync all scores
@@ -185,13 +189,26 @@ function setupSocketServer(io) {
           score: p.finalScore || 0,
         }));
 
+        console.log("🔄 Syncing scores before next question:", updatedPlayers);
+
         // ✅ Send updated scores to all players
         io.to(gameId).emit("players-score-sync", updatedPlayers);
+
+        // ✅ Small delay to ensure score sync happens first
+        setTimeout(() => {
+          io.to(gameId).emit("next-question", {
+            gameId,
+            questionIndex,
+          });
+        }, 100);
       } catch (error) {
         console.error("❌ Error syncing scores before next question:", error);
+        // Still proceed with next question even if score sync fails
+        io.to(gameId).emit("next-question", {
+          gameId,
+          questionIndex,
+        });
       }
-
-      io.to(gameId).emit("next-question", index);
     });
 
     socket.on("disconnect", () => {

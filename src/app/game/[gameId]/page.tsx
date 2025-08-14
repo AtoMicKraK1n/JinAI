@@ -130,7 +130,10 @@ export default function QuizGamePage() {
       setQuestionStartTime(Date.now()); // ✅ Track when question starts
     });
 
-    socket.on("next-question", (index: number) => {
+    socket.on("next-question", (data) => {
+      console.log("📨 Received next-question event:", data);
+      const index = typeof data === "object" ? data.questionIndex : data;
+
       setGameState((prev) => ({
         ...prev,
         currentQuestion: index,
@@ -150,18 +153,26 @@ export default function QuizGamePage() {
 
       const { userId: answeredUser, isCorrect, points, correctAnswer } = data;
 
-      // ✅ Update all players' scores in real-time
-      setPlayers((prev) =>
-        prev.map((player) => {
+      // ✅ ALWAYS update the scoreboard for ALL players (including self for consistency)
+      setPlayers((prev) => {
+        const updated = prev.map((player) => {
           if (player.userId === answeredUser) {
+            const newScore = (player.score || 0) + points;
+            console.log(
+              `🎯 Updating ${player.username || answeredUser} score: ${
+                player.score || 0
+              } + ${points} = ${newScore}`
+            );
             return {
               ...player,
-              score: (player.score || 0) + points,
+              score: newScore,
             };
           }
           return player;
-        })
-      );
+        });
+        console.log("📊 Updated players list:", updated);
+        return updated;
+      });
 
       // ✅ If it's another player's answer, show the correct answer
       if (answeredUser !== userId) {
@@ -335,11 +346,22 @@ export default function QuizGamePage() {
 
   const nextQuestion = () => {
     const next = gameState.currentQuestion + 1;
+    console.log(
+      `🔄 Next question triggered. Current: ${gameState.currentQuestion}, Next: ${next}, Total: ${questions.length}`
+    );
+    console.log(
+      `👑 Is host: ${isHost}, User ID: ${userId}, Host ID: ${players[0]?.userId}`
+    );
+
     if (next >= questions.length) {
+      console.log("🏁 Game finished, redirecting to results");
       router.push(`/results/${gameId}`);
     } else {
       if (isHost) {
-        socket.emit("next-question", next);
+        console.log(`📡 Host emitting next-question: ${next}`);
+        socket.emit("next-question", { gameId, questionIndex: next });
+      } else {
+        console.log("❌ Not host, cannot advance question");
       }
     }
   };
