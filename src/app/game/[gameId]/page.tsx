@@ -172,6 +172,12 @@ export default function QuizGamePage() {
       }
     });
 
+    // ✅ NEW: Listen for score synchronization events
+    socket.on("players-score-sync", (updatedPlayers) => {
+      console.log("🔄 Syncing all player scores:", updatedPlayers);
+      setPlayers(updatedPlayers);
+    });
+
     // Fetch seed questions
     fetch(`/api/games/seed-questions`, {
       method: "POST",
@@ -215,6 +221,7 @@ export default function QuizGamePage() {
       socket.off("existing-players");
       socket.off("next-question");
       socket.off("answer-result");
+      socket.off("players-score-sync"); // ✅ Clean up new listener
     };
   }, [gameId, userId, isHost]);
 
