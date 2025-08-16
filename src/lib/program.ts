@@ -5,7 +5,7 @@
  * IDL can be found at `target/idl/jinai_here.json`.
  */
 export type JinaiHere = {
-  address: "Hqs1UsDrx9s79o2Jm1z9MZxoVsAb9uAU7YMDgWKAwX7G";
+  address: "83DvmTiVdv9GpLydRbc4emFKaFXacmBxEZkVWZVYV12b";
   metadata: {
     name: "jinaiHere";
     version: "0.1.0";
@@ -557,7 +557,6 @@ export type JinaiHere = {
         {
           name: "playerAuthority";
           writable: true;
-          signer: true;
         },
         {
           name: "poolVault";

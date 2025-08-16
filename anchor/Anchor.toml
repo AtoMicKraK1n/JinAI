@@ -1,12 +1,12 @@
 [toolchain]
-package_manager = "Yarn"
+package_manager = "yarn"
 
 [features]
 resolution = true
 skip-lint = false
 
 [programs.localnet]
-jinai_here = "Hqs1UsDrx9s79o2Jm1z9MZxoVsAb9uAU7YMDgWKAwX7G"
+jinai_here = "83DvmTiVdv9GpLydRbc4emFKaFXacmBxEZkVWZVYV12b"
 
 [registry]
 url = "https://api.apr.dev"
@@ -16,5 +16,4 @@ cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-# test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
 test = "npm test"

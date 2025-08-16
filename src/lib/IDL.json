@@ -1,5 +1,5 @@
 {
-  "address": "Hqs1UsDrx9s79o2Jm1z9MZxoVsAb9uAU7YMDgWKAwX7G",
+  "address": "83DvmTiVdv9GpLydRbc4emFKaFXacmBxEZkVWZVYV12b",
   "metadata": {
     "name": "jinai_here",
     "version": "0.1.0",
@@ -560,8 +560,7 @@
         },
         {
           "name": "player_authority",
-          "writable": true,
-          "signer": true
+          "writable": true
         },
         {
           "name": "pool_vault",

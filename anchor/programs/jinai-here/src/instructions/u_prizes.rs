@@ -20,7 +20,8 @@ pub struct UPrizes<'info> {
     pub player: Account<'info, Player>,
 
     #[account(mut)]
-    pub player_authority: Signer<'info>,
+    /// CHECK: used AccountInfo because Signer was not allowing other players to claim their prizes
+    pub player_authority: AccountInfo<'info>,
 
     #[account(
         mut,
