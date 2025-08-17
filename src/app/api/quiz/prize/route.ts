@@ -176,7 +176,7 @@ export async function POST(request: NextRequest) {
     console.log("game.poolIndex (numeric):", game.poolIndex);
 
     // Use poolIndex for PDA generation (numeric), not poolId (address)
-    const poolIndex = parseInt(game.poolIndex);
+    const poolIndex = game.poolIndex;
 
     if (isNaN(poolIndex)) {
       console.error("❌ Invalid poolIndex from database");
@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
           error: "Player account not found",
           details: `Player PDA ${playerPDA.toBase58()} does not exist. Make sure you joined the pool correctly.`,
           playerPDA: playerPDA.toBase58(),
-          poolId: poolId,
+          poolId: poolIndex,
         },
         { status: 404 }
       );
