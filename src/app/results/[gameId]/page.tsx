@@ -1,26 +1,30 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import ParticleBackground from "@/components/ParticleBackground";
 import Navbar from "@/components/Navbar";
 import { motion } from "framer-motion";
-import ClaimPrizeButton from "@/components/ClaimPrizeButton";
 
 interface PlayerResult {
   username: string;
   finalRank: number;
   finalScore: number;
+  walletAddress?: string;
+  prizeWon?: number;
 }
 
 interface GameData {
   poolIndex: number;
   prizePool: number;
   status: string;
+  gameId: string;
+  isHost: boolean;
 }
 
 export default function ResultsPage() {
   const { gameId } = useParams();
+  const router = useRouter();
   const [results, setResults] = useState<PlayerResult[]>([]);
   const [gameData, setGameData] = useState<GameData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,16 +50,14 @@ export default function ResultsPage() {
 
         if (
           (data.success && Array.isArray(data.results)) ||
-          data.message === "Already completed"
+          data.message === "Already completed" ||
+          data.message === "Game completed"
         ) {
           setResults(data.results);
 
-          // ✅ Also fetch game data to get poolIndex
+          // Set game data from API response
           if (data.gameData) {
             setGameData(data.gameData);
-          } else {
-            // ✅ Fallback: fetch game data separately
-            await fetchGameData(token);
           }
         } else {
           console.error("❌ Failed to load results:", data.message || data);
@@ -64,27 +66,6 @@ export default function ResultsPage() {
         console.error("Failed to fetch results", err);
       } finally {
         setLoading(false);
-      }
-    };
-
-    const fetchGameData = async (token: string) => {
-      try {
-        const res = await fetch(`/api/games/${gameId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const data = await res.json();
-        if (data.success && data.game) {
-          setGameData({
-            poolIndex: data.game.poolIndex,
-            prizePool: data.game.prizePool,
-            status: data.game.status,
-          });
-        }
-      } catch (err) {
-        console.error("Failed to fetch game data", err);
       }
     };
 
@@ -105,6 +86,19 @@ export default function ResultsPage() {
     if (rank === 2) return "🥈";
     if (rank === 3) return "🥉";
     return "🏆";
+  };
+
+  const handleClaimPrizes = () => {
+    if (gameData) {
+      // Navigate to claim page with game data
+      router.push(
+        `/claim?gameId=${gameData.gameId}&poolIndex=${gameData.poolIndex}`
+      );
+    }
+  };
+
+  const handleBackToDashboard = () => {
+    router.push("/dashboard");
   };
 
   return (
@@ -177,6 +171,12 @@ export default function ResultsPage() {
                         {player.finalRank === 3 && "Third place"}
                         {player.finalRank === 4 && "Fourth place"}
                       </div>
+                      {/* Show prize amount if available */}
+                      {player.prizeWon && player.prizeWon > 0 && (
+                        <div className="text-xs text-golden-400 font-semibold">
+                          Prize: {player.prizeWon.toFixed(4)} SOL
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -187,19 +187,44 @@ export default function ResultsPage() {
               ))}
             </motion.div>
 
-            {/* Claim Prize Button */}
-            {gameData && (
-              <motion.div
-                className="mt-8 w-full max-w-md"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6 }}
+            {/* Action Buttons */}
+            <motion.div
+              className="mt-8 w-full max-w-md space-y-4"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              {/* Claim Prizes Button - Only show for host when game is completed */}
+              {gameData?.status === "COMPLETED" && gameData?.isHost && (
+                <button
+                  onClick={handleClaimPrizes}
+                  className="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
+                >
+                  🏆 Claim & Distribute Prizes
+                </button>
+              )}
+
+              {/* Back to Dashboard Button */}
+              <button
+                onClick={handleBackToDashboard}
+                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-3 px-6 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-lg"
               >
-                <ClaimPrizeButton
-                  poolIndex={gameData.poolIndex}
-                  gameId={gameId as string}
-                  prizePool={gameData.prizePool}
-                />
+                📊 Back to Dashboard
+              </button>
+            </motion.div>
+
+            {/* Info Message for Non-Host Players */}
+            {gameData?.status === "COMPLETED" && !gameData?.isHost && (
+              <motion.div
+                className="mt-6 p-4 bg-blue-500/20 border border-blue-400/30 rounded-lg text-center max-w-md"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+              >
+                <p className="text-blue-200 text-sm">
+                  🎯 Game completed! The host will claim and distribute prizes
+                  to all players.
+                </p>
               </motion.div>
             )}
           </>

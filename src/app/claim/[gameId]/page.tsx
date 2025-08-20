@@ -11,7 +11,6 @@ export default function PrizeClaimComponent() {
   const [message, setMessage] = useState("");
   const [claimResult, setClaimResult] = useState<any>(null);
 
-  // ✅ Get gameId from URL
   const params = useParams<{ gameId: string }>();
   const gameId = params.gameId;
 
