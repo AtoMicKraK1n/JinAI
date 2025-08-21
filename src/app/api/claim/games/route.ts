@@ -14,16 +14,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Find the user by wallet
   const user = await prisma.user.findUnique({
     where: { walletAddress },
   });
 
   if (!user) {
-    return NextResponse.json({ games: [] }); // no user found → no games
+    return NextResponse.json({ games: [] });
   }
 
-  // Get games where this user participated & has unclaimed rewards
   const participations = await prisma.gameParticipant.findMany({
     where: {
       userId: user.id,
