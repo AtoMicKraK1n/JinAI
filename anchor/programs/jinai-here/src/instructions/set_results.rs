@@ -77,7 +77,7 @@ pub fn set_results_handler(ctx: Context<SetResults>, player_ranks: [u8; 4]) -> R
     }
 
     // Update pool status to completed
-    ctx.accounts.pool.status = PoolStatus::InProgress;
+    ctx.accounts.pool.status = PoolStatus::Completed;
 
     Ok(())
 }

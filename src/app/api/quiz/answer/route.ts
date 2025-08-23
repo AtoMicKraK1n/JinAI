@@ -128,6 +128,7 @@ export async function POST(request: NextRequest) {
         isCorrect,
         responseTime,
         points,
+        answeredAt: new Date(),
       },
     });
 
