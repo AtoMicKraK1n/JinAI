@@ -28,7 +28,7 @@ const games = [
     description:
       "Train your expertise in Norse mythology and Kratos' epic journey.",
     image: "/gowr.jpg",
-    isAvailable: false,
+    isAvailable: true,
     // difficulty: "Hard" as const,
     // players: 800,
     // rating: 4.9,
@@ -149,22 +149,20 @@ const Index = () => {
             >
               <div className="neo-card p-2">
                 <div className="flex gap-2">
-                  {["All Games", "Available", "Coming Soon"].map(
-                    (tab, index) => (
-                      <motion.button
-                        key={tab}
-                        className={`px-6 py-2 rounded-lg font-semibold text-sm transition-all duration-300 ${
-                          index === 0
-                            ? "bg-jingold text-jinblack"
-                            : "text-jingold hover:bg-jingold/10"
-                        }`}
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                      >
-                        {tab}
-                      </motion.button>
-                    )
-                  )}
+                  {["All Games"].map((tab, index) => (
+                    <motion.button
+                      key={tab}
+                      className={`px-6 py-2 rounded-lg font-semibold text-sm transition-all duration-300 ${
+                        index === 0
+                          ? "bg-jingold text-jinblack"
+                          : "text-jingold hover:bg-jingold/10"
+                      }`}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {tab}
+                    </motion.button>
+                  ))}
                 </div>
               </div>
             </motion.div>
