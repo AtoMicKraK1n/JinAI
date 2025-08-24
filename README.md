@@ -36,7 +36,8 @@ Players connect their **Solana wallet**, join quiz lobbies, compete in live quiz
 
 ### **Onchain (Solana Ofc)**
 - [Solana](https://solana.com/)
-- [Anchor Framework](https://project-serum.github.io/anchor/)  
+- [Anchor Framework](https://project-serum.github.io/anchor/)
+- [Helius RPC](https://www.helius.dev/)
 - Program Instructions implemented:  
   - `appoint_pool` – initialize global pool  
   - `create_pool` – host a new game pool  
