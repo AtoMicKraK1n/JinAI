@@ -46,7 +46,7 @@ const Navbar: React.FC = () => {
 
             {/* Navigation Items */}
             <div className="hidden md:flex items-center gap-6">
-              <motion.button
+              {/* <motion.button
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-jingold/20 text-jingold transition-all duration-300 ${
                   isActive("/leaderboard")
                     ? "bg-jingold/30 border-jingold/50"
@@ -72,7 +72,7 @@ const Navbar: React.FC = () => {
               >
                 <IconUsers size={18} />
                 <span className="text-sm font-semibold">Community</span>
-              </motion.button>
+              </motion.button> */}
 
               <motion.button
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-jingold/20 text-jingold transition-all duration-300 ${
