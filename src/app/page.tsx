@@ -87,8 +87,8 @@ const Index = () => {
     const game = games.find((g) => g.id === gameId);
     if (game) {
       if (game.isAvailable) {
-        setSelectedGame(gameId);
-        router.push(`/game/${gameId}`);
+        window.location.href =
+          "https://cdn.botpress.cloud/webchat/v2.3/shareable.html?configUrl=https://files.bpcontent.cloud/2024/12/23/17/20241223175850-3HWXR2SW.json";
       } else {
         setComingSoonTitle(game.title);
         setShowComingSoon(true);
