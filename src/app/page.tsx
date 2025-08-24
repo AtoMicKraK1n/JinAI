@@ -85,14 +85,24 @@ const Index = () => {
 
   const handleGameSelect = (gameId: number) => {
     const game = games.find((g) => g.id === gameId);
-    if (game) {
-      if (game.isAvailable) {
-        window.location.href =
-          "https://cdn.botpress.cloud/webchat/v2.3/shareable.html?configUrl=https://files.bpcontent.cloud/2024/12/23/17/20241223175850-3HWXR2SW.json";
+    if (!game) return;
+
+    if (game.isAvailable) {
+      const redirectMap: Record<number, string> = {
+        1: "https://cdn.botpress.cloud/webchat/v2.3/shareable.html?configUrl=https://files.bpcontent.cloud/2024/12/23/17/20241223175850-3HWXR2SW.json", // GTA V
+        2: "https://cdn.botpress.cloud/webchat/v2.2/shareable.html?configUrl=https://files.bpcontent.cloud/2025/03/29/07/20250329072743-EH48SVL0.json", // God of War
+        // Add more mappings as needed
+      };
+
+      const link = redirectMap[gameId];
+      if (link) {
+        window.location.href = link;
       } else {
-        setComingSoonTitle(game.title);
-        setShowComingSoon(true);
+        router.push(`/game/${gameId}`);
       }
+    } else {
+      setComingSoonTitle(game.title);
+      setShowComingSoon(true);
     }
   };
 
