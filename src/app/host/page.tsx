@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import ParticleBackground from "@/components/ParticleBackground";
 import { motion } from "framer-motion";
 import Navbar from "@/components/Navbar";
+import NeoCard from "@/components/NeoCard"; // ⬅️ import NeoCard
 
 export default function HostStartPage() {
   const router = useRouter();
@@ -75,14 +76,14 @@ export default function HostStartPage() {
         className="relative z-10 min-h-screen px-6 pt-32"
       >
         <div className="flex justify-center items-center h-[70vh]">
-          <div className="bg-black/90 backdrop-blur-md border border-yellow-500 rounded-xl p-10 w-full max-w-md text-center shadow-2xl">
+          <NeoCard className="w-full max-w-md text-center p-10">
             <h1 className="text-3xl font-semibold text-yellow-400 mb-4 font-sans antialiased">
               {loading ? "Checking for existing game..." : "Redirecting..."}
             </h1>
             <p className="text-gray-400">
               Please wait while we prepare your quiz session.
             </p>
-          </div>
+          </NeoCard>
         </div>
       </motion.div>
     </>

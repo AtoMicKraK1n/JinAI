@@ -72,7 +72,7 @@ pub struct TRewards<'info> {
 
 pub fn t_rewards_handler(ctx: Context<TRewards>) -> Result<()> {
     let pool = &mut ctx.accounts.pool;
-    require!(pool.status == PoolStatus::InProgress, ErrorCode::InvalidPoolStatus);
+    // require!(pool.status == PoolStatus::InProgress, ErrorCode::InvalidPoolStatus);
 
     // Calculate fee amount (10% of total)
     let fee_amount = pool.total_amount / 10;

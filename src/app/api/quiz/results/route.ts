@@ -6,6 +6,7 @@ import * as anchor from "@coral-xyz/anchor";
 import bs58 from "bs58";
 import idl from "@/lib/IDL.json";
 import { JinaiHere } from "@/lib/program";
+import { BN } from "@coral-xyz/anchor";
 
 const prisma = new PrismaClient();
 
@@ -175,6 +176,11 @@ export async function GET(request: NextRequest) {
         program.programId
       );
 
+      const [poolVaultPda] = PublicKey.findProgramAddressSync(
+        [Buffer.from("pool-vault"), poolIdBuffer],
+        program.programId
+      );
+
       // Verify pool exists and get current state
       const poolAccount = await program.account.pool.fetchNullable(poolPda);
       if (!poolAccount) {
@@ -245,6 +251,7 @@ export async function GET(request: NextRequest) {
       console.log("🔍 On-chain PDAs:", {
         poolPda: poolPda.toBase58(),
         globalStatePda: globalStatePda.toBase58(),
+        poolVaultPda: poolVaultPda.toBase58(),
         poolIndex: game.poolIndex,
         playerRanks: ranksInCorrectOrder,
         playerPDAs: playerPDAs.map((p) => p.toBase58()),
@@ -258,7 +265,8 @@ export async function GET(request: NextRequest) {
         number
       ];
 
-      // Execute set_results instruction
+      // 1️⃣ Execute set_results instruction first
+      console.log("🔄 Step 1: Setting results on-chain...");
       const setResultsTxSig = await program.methods
         .setResults(ranksArray)
         .accountsPartial({
@@ -277,40 +285,107 @@ export async function GET(request: NextRequest) {
         });
 
       console.log("✅ Set results transaction successful:", setResultsTxSig);
+      await connection.confirmTransaction(setResultsTxSig, "confirmed");
 
-      // Get transaction details to see what actually happened
+      // 2️⃣ Execute t_rewards instruction to calculate prizes and send fee to treasury
+      console.log("🔄 Step 2: Calculating prizes and transferring fee...");
+
+      // Get global state to find treasury address
+      const globalStateAccount = await program.account.globalState.fetch(
+        globalStatePda
+      );
+      const treasuryAddress = globalStateAccount.treasury;
+
+      const tRewardsTxSig = await program.methods
+        .tRewards()
+        .accountsPartial({
+          pool: poolPda,
+          globalState: globalStatePda,
+          authority: inGameKeypair.publicKey,
+          poolVault: poolVaultPda,
+          treasury: treasuryAddress,
+          player1: playerPDAs[0],
+          player2: playerPDAs[1],
+          player3: playerPDAs[2],
+          player4: playerPDAs[3],
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([inGameKeypair])
+        .rpc({
+          commitment: "confirmed",
+          skipPreflight: false,
+        });
+
+      console.log("✅ T_rewards transaction successful:", tRewardsTxSig);
+      await connection.confirmTransaction(tRewardsTxSig, "confirmed");
+
+      // Get transaction details for both transactions
       try {
-        const txDetails = await connection.getTransaction(setResultsTxSig, {
+        const setResultsDetails = await connection.getTransaction(
+          setResultsTxSig,
+          {
+            commitment: "confirmed",
+            maxSupportedTransactionVersion: 0,
+          }
+        );
+
+        const tRewardsDetails = await connection.getTransaction(tRewardsTxSig, {
           commitment: "confirmed",
           maxSupportedTransactionVersion: 0,
         });
 
-        if (txDetails?.meta?.logMessages) {
-          console.log("📋 Transaction logs:");
-          txDetails.meta.logMessages.forEach((log, index) => {
+        if (setResultsDetails?.meta?.logMessages) {
+          console.log("📋 Set Results Transaction logs:");
+          setResultsDetails.meta.logMessages.forEach((log, index) => {
             console.log(`  [${index}] ${log}`);
           });
         }
 
-        if (txDetails?.meta?.err) {
-          console.error("❌ Transaction had an error:", txDetails.meta.err);
+        if (tRewardsDetails?.meta?.logMessages) {
+          console.log("📋 T_rewards Transaction logs:");
+          tRewardsDetails.meta.logMessages.forEach((log, index) => {
+            console.log(`  [${index}] ${log}`);
+          });
+        }
+
+        if (setResultsDetails?.meta?.err) {
+          console.error(
+            "❌ Set results transaction had an error:",
+            setResultsDetails.meta.err
+          );
+        }
+
+        if (tRewardsDetails?.meta?.err) {
+          console.error(
+            "❌ T_rewards transaction had an error:",
+            tRewardsDetails.meta.err
+          );
         }
       } catch (logError) {
         console.warn("⚠️ Could not fetch transaction logs:", logError);
       }
 
-      // Wait for transaction confirmation and verify the pool status was updated
-      console.log("⏳ Waiting for transaction confirmation...");
-      await connection.confirmTransaction(setResultsTxSig, "confirmed");
-
-      // Retry fetching the pool account with some delay to ensure state update
-      let updatedPoolAccount;
+      // Wait and verify the pool status was updated to completed
+      console.log("⏳ Waiting for final confirmation...");
+      let updatedPoolAccount: {
+        poolId: BN;
+        creator: PublicKey;
+        totalAmount: BN;
+        status: any;
+        minDeposit: BN;
+        currentPlayers: number;
+        maxPlayers: number;
+        endTime: BN;
+        prizeDistribution: number[];
+        feeAmount: BN;
+        bump: number;
+        playerAccounts: PublicKey[];
+      };
       let retries = 3;
 
       for (let i = 0; i < retries; i++) {
         try {
-          // Add a small delay to allow blockchain state to update
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          await new Promise((resolve) => setTimeout(resolve, 1500));
 
           updatedPoolAccount = await program.account.pool.fetch(poolPda);
           console.log(
@@ -337,8 +412,27 @@ export async function GET(request: NextRequest) {
           );
         }
       }
+
+      // Verify player prize amounts were set
+      console.log("🔍 Verifying player prize amounts...");
+      for (let i = 0; i < playerPDAs.length; i++) {
+        try {
+          const playerAccount = await program.account.player.fetch(
+            playerPDAs[i]
+          );
+          console.log(
+            `Player ${i + 1}: Rank ${
+              playerAccount.rank
+            }, Prize Amount: ${playerAccount.prizeAmount.toString()} lamports (${
+              playerAccount.prizeAmount.toNumber() / 1e9
+            } SOL)`
+          );
+        } catch (error) {
+          console.error(`Error fetching player ${i + 1} account:`, error);
+        }
+      }
     } catch (onChainError) {
-      console.error("❌ On-chain set_results operation failed:", onChainError);
+      console.error("❌ On-chain operations failed:", onChainError);
       // Log the error but don't fail the entire operation
       // The database has been updated successfully, which is the minimum requirement
       console.warn(
@@ -356,7 +450,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       message:
-        "Game completed successfully! Results finalized and set on-chain.",
+        "Game completed successfully! Results finalized, prizes calculated, and fee transferred to treasury.",
       results: finalResults.map((r) => ({
         finalRank: r.finalRank,
         finalScore: r.finalScore,

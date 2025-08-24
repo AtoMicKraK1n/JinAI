@@ -15,16 +15,15 @@ import { useToast } from "@/components/ui/use-toast";
 import idl from "@/lib/IDL.json";
 import { JinaiHere } from "@/lib/program";
 import * as anchor from "@coral-xyz/anchor";
+import NeoCard from "@/components/NeoCard"; // ⬅️ Import NeoCard
 
 export default function LobbyPage() {
   const { gameId } = useParams();
   const router = useRouter();
   const [players, setPlayers] = useState<any[]>([]);
-  // 'joined' is now only set after server confirmation via the 'existing-players' event
   const [joined, setJoined] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(true);
 
-  // Use a ref to ensure the join action is only attempted once
   const joinAttempted = useRef(false);
 
   const { publicKey, signTransaction } = useWallet();
@@ -34,9 +33,6 @@ export default function LobbyPage() {
   const token =
     typeof window !== "undefined" ? sessionStorage.getItem("jwt") : null;
 
-  // Refactored joinGame function:
-  // - It no longer sets component state directly.
-  // - Its only job is to perform the transaction and emit the 'join-game' event.
   const joinGame = async () => {
     console.log("🔥 joinGame called");
     try {
@@ -134,9 +130,7 @@ export default function LobbyPage() {
       }
 
       console.log("✅ Solana transaction successful:", txid);
-      console.log("📤 Emitting join-game event...");
 
-      // Emit the event and log the server's acknowledgement
       socket.emit("join-game", { gameId, token }, (response: any) => {
         if (response?.status === "ok") {
           console.log("✅ Server acknowledged join-game:", response);
@@ -147,12 +141,8 @@ export default function LobbyPage() {
     } catch (err: any) {
       const errMsg = err?.message || "";
       if (errMsg.includes("This transaction has already been processed")) {
-        console.warn(
-          "Transaction already processed, assuming success and emitting join-game."
-        );
-        socket.emit("join-game", { gameId, token }, (response: any) => {
-          console.log("✅ Server acknowledged join-game (retry):", response);
-        });
+        console.warn("Transaction already processed, assuming success.");
+        socket.emit("join-game", { gameId, token });
         return;
       }
 
@@ -170,9 +160,7 @@ export default function LobbyPage() {
     setShowConfirmation(false);
   };
 
-  // HOOK 1: Handles the ONE-TIME action of joining the game.
   useEffect(() => {
-    // These conditions must be met to attempt joining.
     if (
       showConfirmation ||
       !publicKey ||
@@ -183,42 +171,32 @@ export default function LobbyPage() {
       return;
     }
 
-    // Mark that we are attempting to join to prevent this hook from running again.
-    console.log("🚀 Conditions met, attempting to join game...");
+    console.log("🚀 Attempting to join game...");
     joinAttempted.current = true;
 
-    // Ensure the socket is connected before we call joinGame.
     if (socket.connected) {
       joinGame();
     } else {
-      console.log("⏳ Socket not connected, connecting first...");
       socket.connect();
-      socket.once("connect", () => {
-        console.log("✅ Socket connected, now calling joinGame().");
-        joinGame();
-      });
+      socket.once("connect", () => joinGame());
     }
-  }, [showConfirmation, publicKey, token, gameId]); // Dependencies that trigger the join action.
+  }, [showConfirmation, publicKey, token, gameId]);
 
-  // HOOK 2: Handles all PERSISTENT socket event listeners.
   useEffect(() => {
     const handleExistingPlayers = (playersList: any[]) => {
-      console.log("📋 'existing-players' event received:", playersList);
       setPlayers(
         playersList.map((p) => ({
           userId: p.userId,
           username: p.username || `anon_${p.userId.slice(0, 4)}`,
         }))
       );
-      // This is the true confirmation that we have joined.
       setJoined(true);
     };
 
     const handlePlayerJoined = (data: any) => {
-      console.log("📥 'player-joined' event received:", data);
       if (!data?.userId) return;
       setPlayers((prev) => {
-        if (prev.some((p) => p.userId === data.userId)) return prev; // Avoid duplicates
+        if (prev.some((p) => p.userId === data.userId)) return prev;
         return [
           ...prev,
           {
@@ -230,12 +208,10 @@ export default function LobbyPage() {
     };
 
     const handleStartGame = () => {
-      console.log("🚀 'start-game' event received, redirecting...");
       router.push(`/game/${gameId}`);
     };
 
     const handleDisconnect = () => {
-      console.log("❌ Socket disconnected");
       toast({
         variant: "destructive",
         title: "Disconnected",
@@ -243,21 +219,18 @@ export default function LobbyPage() {
       });
     };
 
-    // Attach all event listeners
     socket.on("existing-players", handleExistingPlayers);
     socket.on("player-joined", handlePlayerJoined);
     socket.on("start-game", handleStartGame);
     socket.on("disconnect", handleDisconnect);
 
-    // This cleanup function will only run when the component unmounts
     return () => {
-      console.log("🧹 Cleaning up lobby listeners...");
       socket.off("existing-players", handleExistingPlayers);
       socket.off("player-joined", handlePlayerJoined);
       socket.off("start-game", handleStartGame);
       socket.off("disconnect", handleDisconnect);
     };
-  }, [gameId, router, toast]); // Minimal dependencies for listeners.
+  }, [gameId, router, toast]);
 
   return (
     <>
@@ -271,10 +244,9 @@ export default function LobbyPage() {
       >
         {showConfirmation ? (
           <div className="flex justify-center items-center h-[70vh]">
-            <div className="bg-black/60 backdrop-blur-md border border-yellow-500 rounded-xl p-10 w-full max-w-md text-center shadow-lg">
+            <NeoCard className="w-full max-w-md text-center p-10">
               <h2 className="text-2xl font-bold text-yellow-400 mb-6">
-                💸 You will be charged 1.000 SOL and network fee to join this
-                pool (ofc devnet)
+                💸 You will be charged 1 SOL + network fee to join this pool
               </h2>
               <button
                 onClick={handleJoinConfirm}
@@ -282,7 +254,7 @@ export default function LobbyPage() {
               >
                 Confirm & Join Game
               </button>
-            </div>
+            </NeoCard>
           </div>
         ) : (
           <StartLobby players={players} />
