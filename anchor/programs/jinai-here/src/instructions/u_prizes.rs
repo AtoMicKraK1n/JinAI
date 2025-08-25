@@ -37,7 +37,7 @@ pub fn u_prizes_handler(ctx: Context<UPrizes>) -> Result<()> {
     let player = &mut ctx.accounts.player;
     let pool = &ctx.accounts.pool;
 
-    require!(pool.status == PoolStatus::Completed, ErrorCode::PoolNotCompleted);
+    // require!(pool.status == PoolStatus::Completed, ErrorCode::PoolNotCompleted);
     require!(player.prize_amount > 0, ErrorCode::NoPrize);
     require!(!player.has_claimed, ErrorCode::AlreadyClaimed);
 
